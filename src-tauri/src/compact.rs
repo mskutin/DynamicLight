@@ -114,9 +114,9 @@ fn place(window: &WebviewWindow, prefs: &Preferences) -> Result<(), String> {
                 area.size.height,
             ),
         );
-        window
-            .set_position(PhysicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
+        // Some compositors expose monitors but still reserve window placement.
+        // Keep controls reachable using the compositor's chosen position.
+        let _ = window.set_position(PhysicalPosition::new(x, y));
     }
     Ok(())
 }
