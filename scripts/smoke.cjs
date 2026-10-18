@@ -43,7 +43,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       await page.waitForFunction(() => !busy);
       await page.locator('#capture').click();
       await page.waitForFunction(() => runtime.capturing && runtime.captureSize[0] > 0, { timeout: 15000 });
-      await delay(1500);
+      // Exclude display enumeration / capture startup from the FPS window.
+      await delay(3000);
       let state = await control({ type: 'snapshot' });
       console.log(JSON.stringify({ screen: { dimensions: state.captureSize, fps: state.fps, connected: state.status.connected } }));
       assert(state.fps > 0 && state.status.connected);
@@ -54,7 +55,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       await page.locator('#capture').click();
       await page.waitForFunction(() => runtime.capturing);
       await delay(1500); state = await control({ type: 'snapshot' });
-      assert.equal(state.error, ''); assert(state.status.connected);
+      assert.equal(state.error, ''); assert(state.status.connected); assert(state.audioSamples > 0, 'System audio samples arrived');
       console.log(JSON.stringify({ audio: { capturing: state.capturing, samples: state.audioSamples, fps: state.fps } }));
       await page.waitForFunction(() => !busy);
       await page.locator('[data-mode="rainbow"]').click();

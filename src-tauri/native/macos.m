@@ -82,10 +82,10 @@ bool dl_audio_stop(void *value) {
     @autoreleasepool {
         DLLightAudio *handler=(__bridge DLLightAudio *)value;
         dispatch_semaphore_t done=dispatch_semaphore_create(0);
-        __block NSError *error=nil;
-        [handler.stream stopCaptureWithCompletionHandler:^(NSError *err) {error=err; dispatch_semaphore_signal(done);}];
+        [handler.stream stopCaptureWithCompletionHandler:^(NSError *err) {dispatch_semaphore_signal(done);}];
         dispatch_semaphore_wait(done,DISPATCH_TIME_FOREVER);
-        if (error) return false;
+        // Even when the stream has already stopped with an error, detach and
+        // drain callbacks before releasing the Rust context.
         [handler.stream removeStreamOutput:handler type:SCStreamOutputTypeAudio error:nil];
         dispatch_sync(handler.queue, ^{handler.samples=NULL;handler.failure=NULL;});
         handler.stream=nil;

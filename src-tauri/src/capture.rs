@@ -26,6 +26,10 @@ pub fn screens() -> Result<Vec<Screen>, String> {
 pub struct ScreenCapture {
     monitor: Monitor,
     pub dimensions: (u32, u32),
+    #[cfg(target_os = "windows")]
+    thumbnail: crate::capture_windows::Thumbnail,
+    #[cfg(target_os = "windows")]
+    desktop: Option<crate::capture_windows::Desktop>,
 }
 impl ScreenCapture {
     pub fn start(id: &str) -> Result<Self, String> {
@@ -40,22 +44,71 @@ impl ScreenCapture {
         }
         .ok_or("Selected display is unavailable. Refresh the display list.")?
         .clone();
+        #[cfg(not(target_os = "windows"))]
         let image = monitor.capture_image().map_err(|e| {
             format!("Screen capture failed: {e}. Check screen recording permission.")
         })?;
+        #[cfg(target_os = "windows")]
+        {
+            let dimensions = (
+                monitor.width().map_err(|e| e.to_string())?,
+                monitor.height().map_err(|e| e.to_string())?,
+            );
+            let mut thumbnail = crate::capture_windows::Thumbnail::new(dimensions.0, dimensions.1)?;
+            thumbnail.grab(
+                monitor.x().map_err(|e| e.to_string())?,
+                monitor.y().map_err(|e| e.to_string())?,
+                dimensions.0,
+                dimensions.1,
+            )?;
+            Ok(Self {
+                desktop: crate::capture_windows::Desktop::new(&monitor.name().unwrap_or_default())
+                    .ok(),
+                monitor,
+                dimensions,
+                thumbnail,
+            })
+        }
+        #[cfg(not(target_os = "windows"))]
         Ok(Self {
             monitor,
             dimensions: (image.width(), image.height()),
         })
     }
     pub fn colors(&mut self, settings: &Settings) -> Result<Vec<Rgb>, String> {
-        let image = self.monitor.capture_image().map_err(|e| e.to_string())?;
-        self.dimensions = (image.width(), image.height());
-        Ok(lighting::sample(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            settings,
-        ))
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(desktop) = self.desktop.as_mut() {
+                return desktop.colors(settings);
+            }
+            let dimensions = (
+                self.monitor.width().map_err(|e| e.to_string())?,
+                self.monitor.height().map_err(|e| e.to_string())?,
+            );
+            if self.dimensions != dimensions {
+                self.thumbnail =
+                    crate::capture_windows::Thumbnail::new(dimensions.0, dimensions.1)?;
+                self.dimensions = dimensions;
+            }
+            let (w, h) = (self.thumbnail.width, self.thumbnail.height);
+            let pixels = self.thumbnail.grab(
+                self.monitor.x().map_err(|e| e.to_string())?,
+                self.monitor.y().map_err(|e| e.to_string())?,
+                dimensions.0,
+                dimensions.1,
+            )?;
+            Ok(lighting::sample(pixels, w, h, settings))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let image = self.monitor.capture_image().map_err(|e| e.to_string())?;
+            self.dimensions = (image.width(), image.height());
+            Ok(lighting::sample(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                settings,
+            ))
+        }
     }
 }

@@ -76,6 +76,7 @@ impl Controller {
             self.write(&protocol::command(id, 0x93, &[0]))?;
             let id = self.id();
             self.write(&protocol::command(id, 0x87, &[100]))?;
+            self.solid([0; 3], 127)?;
             self.status = Status {
                 connected: true,
                 message: "Connected over USB".into(),

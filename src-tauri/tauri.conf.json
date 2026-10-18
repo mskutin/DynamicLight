@@ -17,6 +17,7 @@
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "copyright": "Copyright 2026 mskutin",
     "licenseFile": "../LICENSE",
+    "resources": { "../LICENSE": "LICENSE" },
     "category": "Utility",
     "shortDescription": "USB monitor backlight controller",
     "windows": { "nsis": { "installMode": "currentUser" } },

@@ -1110,6 +1110,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-single-instance",
  "tempfile",
+ "windows 0.62.2",
  "xcap",
 ]
 

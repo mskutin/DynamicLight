@@ -1,5 +1,7 @@
 mod audio;
 mod capture;
+#[cfg(target_os = "windows")]
+mod capture_windows;
 mod device;
 mod engine;
 mod lighting;
@@ -8,12 +10,16 @@ mod protocol;
 mod settings;
 
 use engine::{Action, Handle, Snapshot};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+struct Preview(Arc<AtomicBool>);
 
 #[tauri::command]
 async fn control(action: Action, state: tauri::State<'_, Handle>) -> Result<Snapshot, String> {
@@ -72,11 +78,13 @@ pub fn run() {
                 settings::Settings::default()
             };
             let emitter = app.handle().clone();
+            let preview = Arc::new(AtomicBool::new(true));
+            app.manage(Preview(preview.clone()));
             let handle = engine::start(settings, path, warning, move |snapshot| {
-                if let Some(win) = emitter.get_webview_window("main") {
-                    if win.is_visible().unwrap_or(false) && !win.is_minimized().unwrap_or(false) {
-                        let _ = win.emit("lighting", snapshot);
-                    }
+                // Never synchronously query the GUI thread from the lighting
+                // worker: the GUI may be waiting for a suspend acknowledgement.
+                if preview.load(Ordering::Relaxed) {
+                    let _ = emitter.emit_to("main", "lighting", snapshot);
                 }
             });
             platform::watch_power(handle.clone()).map_err(std::io::Error::other)?;
@@ -109,7 +117,15 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(focused) = event {
+                if let Some(preview) = window.try_state::<Preview>() {
+                    preview.0.store(*focused, Ordering::Relaxed);
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let Some(preview) = window.try_state::<Preview>() {
+                    preview.0.store(false, Ordering::Relaxed);
+                }
                 api.prevent_close();
                 let _ = window.hide();
             }

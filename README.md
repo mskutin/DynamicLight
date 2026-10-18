@@ -49,8 +49,8 @@ For another Mac architecture, use `rustup target add x86_64-apple-darwin` or `aa
 
 - `src-tauri/src/protocol.rs` implements RB commands and SC frames, split into 64-byte payloads plus report ID 0.
 - `device.rs` opens only the lighting interface, rejects the keyboard interface, checks complete writes, and drains replies. A single worker owns all USB operations.
-- `engine.rs` owns settings, capture lifetimes, effects, smoothing, reconnect, and frame pacing. It does not depend on JavaScript timers. Preview events are limited to 10 Hz and suppressed while hidden/minimized.
-- `capture.rs` uses native display capture through xcap. `audio.rs` uses bounded sample buffers and RustFFT. The macOS bridge handles ScreenCaptureKit system audio, microphone permission, and sleep notifications.
+- `engine.rs` owns settings, capture lifetimes, effects, smoothing, reconnect, and frame pacing. It does not depend on JavaScript timers. Preview events are limited to 10 Hz and suppressed while the window is unfocused, hidden, or minimized.
+- `capture.rs` enumerates displays through xcap. Windows uses Desktop Duplication with direct edge sampling from a reusable GPU staging texture, with a small GDI thumbnail as a fallback for unsupported or rotated displays. macOS uses native xcap capture. `audio.rs` uses bounded sample buffers and RustFFT. The macOS bridge handles ScreenCaptureKit system audio, microphone permission, and sleep notifications.
 - The HTML/CSS/JavaScript UI sends validated commands through Tauri IPC. It has no Node.js, filesystem, shell, or remote network access. Runtime assets are embedded in the executable.
 
 Settings are atomically saved under the OS application-data directory in `com.dynamiclight.desktop/settings.json`. On first launch, valid settings from the Electron prototype's `dynamiclight/settings.json` are imported. Legacy display IDs reset to the primary display because native display IDs differ. The old file is retained.

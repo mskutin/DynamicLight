@@ -140,12 +140,12 @@ impl Engine {
         }
     }
     fn stop(&mut self) {
+        self.black();
         self.screen = None;
         self.audio = None;
         self.state.capturing = false;
         self.state.capture_size = (0, 0);
         self.state.audio_samples = 0;
-        self.black();
     }
     pub fn action(&mut self, action: Action) -> Result<Snapshot, String> {
         match action {
@@ -210,15 +210,19 @@ impl Engine {
             }
             Action::StopCapture => self.stop(),
             Action::Suspend => {
-                self.screen = None;
-                self.audio = None;
-                self.state.capturing = false;
+                // Turn off before releasing capture: an OS capture teardown may
+                // wait for the GUI thread that delivered the sleep notification.
                 if self.state.settings.off_on_sleep {
                     self.black();
                 }
                 self.suspended = true;
                 self.state.powered = false;
                 self.controller.close("Computer sleeping");
+                self.screen = None;
+                self.audio = None;
+                self.state.capturing = false;
+                self.state.capture_size = (0, 0);
+                self.state.audio_samples = 0;
             }
             Action::Resume => {
                 self.suspended = false;
@@ -228,13 +232,13 @@ impl Engine {
             }
             Action::Shutdown => {
                 self.desired = false;
-                self.screen = None;
-                self.audio = None;
-                self.state.capturing = false;
                 if self.state.settings.off_on_quit {
                     self.black();
                 }
                 self.controller.close("Closed");
+                self.screen = None;
+                self.audio = None;
+                self.state.capturing = false;
             }
         }
         self.state.status = self.controller.status.clone();
@@ -356,6 +360,7 @@ pub fn start(
         .name("lighting".into())
         .spawn(move || {
             let mut engine = Engine::new(settings, path, warning);
+            let mut clock = crate::platform::FrameClock::new();
             let mut next = Instant::now();
             let mut last_event = Instant::now();
             loop {
@@ -380,6 +385,11 @@ pub fn start(
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
                 if Instant::now() >= next {
+                    clock.set_active(
+                        !engine.suspended
+                            && engine.state.powered
+                            && (engine.state.capturing || engine.state.settings.mode == "rainbow"),
+                    );
                     let began = Instant::now();
                     engine.tick();
                     next = began + Duration::from_secs_f64(1.0 / engine.state.settings.fps as f64);

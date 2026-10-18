@@ -1,5 +1,39 @@
 use crate::engine::Handle;
 
+pub struct FrameClock {
+    active: bool,
+}
+#[cfg(target_os = "windows")]
+#[link(name = "winmm")]
+extern "system" {
+    fn timeBeginPeriod(period: u32) -> u32;
+    fn timeEndPeriod(period: u32) -> u32;
+}
+impl FrameClock {
+    pub fn new() -> Self {
+        Self { active: false }
+    }
+    pub fn set_active(&mut self, active: bool) {
+        if self.active == active {
+            return;
+        }
+        #[cfg(target_os = "windows")]
+        unsafe {
+            if active {
+                timeBeginPeriod(1);
+            } else {
+                timeEndPeriod(1);
+            }
+        }
+        self.active = active;
+    }
+}
+impl Drop for FrameClock {
+    fn drop(&mut self) {
+        self.set_active(false);
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub fn watch_power(handle: Handle) -> Result<(), String> {
     use std::ffi::c_void;

@@ -26,7 +26,21 @@ pub fn positions(count: usize, sides: u8, aspect: f32) -> Vec<(f32, f32)> {
         .collect()
 }
 pub fn sample(data: &[u8], width: u32, height: u32, settings: &Settings) -> Vec<Rgb> {
-    if width == 0 || height == 0 || data.len() < width as usize * height as usize * 4 {
+    sample_strided(data, width, height, width as usize * 4, false, settings)
+}
+pub fn sample_strided(
+    data: &[u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    bgra: bool,
+    settings: &Settings,
+) -> Vec<Rgb> {
+    if width == 0
+        || height == 0
+        || stride < width as usize * 4
+        || data.len() < stride * height as usize
+    {
         return vec![[0; 3]; settings.count];
     }
     positions(settings.count, settings.sides, width as f32 / height as f32)
@@ -45,9 +59,9 @@ pub fn sample(data: &[u8], width: u32, height: u32, settings: &Settings) -> Vec<
                 for px in (cx.saturating_sub(rx)..=(cx + rx).min(width - 1))
                     .step_by((rx / 4).max(1) as usize)
                 {
-                    let p = ((py * width + px) * 4) as usize;
+                    let p = py as usize * stride + px as usize * 4;
                     for c in 0..3 {
-                        sum[c] += data[p + c] as u32;
+                        sum[c] += data[p + if bgra { 2 - c } else { c }] as u32;
                     }
                     n += 1;
                 }
@@ -84,6 +98,17 @@ pub fn reorder(colors: &[Rgb], reverse: bool, offset: usize) -> Vec<Rgb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bgra_row_padding_is_not_sampled() {
+        let mut pixels = vec![170; 40];
+        for y in 0..2 {
+            for x in 0..4 {
+                pixels[y * 20 + x * 4..y * 20 + x * 4 + 4].copy_from_slice(&[3, 2, 1, 255]);
+            }
+        }
+        let colors = sample_strided(&pixels, 4, 2, 20, true, &Settings::default());
+        assert!(colors.iter().all(|rgb| *rgb == [1, 2, 3]));
+    }
     #[test]
     fn edge_sampling_is_spatial() {
         let mut data = vec![0; 160 * 90 * 4];
