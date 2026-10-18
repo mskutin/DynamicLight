@@ -123,6 +123,7 @@ pub struct Engine {
     capture_retry: Instant,
     source_check: Instant,
     source_signature: Option<String>,
+    blend_sources: (Option<String>, Option<String>),
     screen: Option<ScreenCapture>,
     audio: Option<Audio>,
     previous: Vec<[f32; 3]>,
@@ -174,6 +175,7 @@ impl Engine {
             capture_retry: Instant::now(),
             source_check: Instant::now(),
             source_signature: None,
+            blend_sources: (None, None),
             screen: None,
             audio: None,
             previous: vec![],
@@ -290,6 +292,31 @@ impl Engine {
         self.stop();
         self.capture_retry = Instant::now();
     }
+    fn lose_blend_source(&mut self, screen: bool) {
+        if screen {
+            self.screen = None;
+            self.state.capture_size = (0, 0);
+        } else {
+            self.audio = None;
+            self.state.audio_samples = 0;
+            self.state.audio_level = 0.0;
+            self.state.audio_bands.fill(0.0);
+            self.state.beat_level = 0.0;
+            self.beat = crate::beat::Detector::default();
+        }
+        if self.screen.is_none() && self.audio.is_none() {
+            self.interrupt_capture();
+            self.state.error = "Both capture sources are unavailable. Click Retry.".into();
+        } else {
+            self.state.error = if screen {
+                "Screen source changed; using music. Click Retry."
+            } else {
+                "Audio source changed; using screen colors. Click Retry."
+            }
+            .into();
+            self.capture_retry = Instant::now();
+        }
+    }
     pub fn system_event(&mut self, event: SystemEvent) {
         let was_paused = !self.life.pause_reason(&self.state.settings).is_empty();
         match event {
@@ -313,17 +340,17 @@ impl Engine {
             SystemEvent::DisplayOff(off) => self.life.display_off = off,
             SystemEvent::Locked(locked) => self.life.locked = locked,
             SystemEvent::SourcesChanged => {
-                if self.state.capturing
-                    && matches!(self.state.settings.mode.as_str(), "screen" | "blend")
-                {
+                if self.state.capturing && self.state.settings.mode == "blend" {
+                    self.lose_blend_source(true);
+                } else if self.state.capturing && self.state.settings.mode == "screen" {
                     self.interrupt_capture();
                 }
             }
             #[cfg(target_os = "linux")]
             SystemEvent::AudioChanged => {
-                if self.state.capturing
-                    && matches!(self.state.settings.mode.as_str(), "music" | "blend")
-                {
+                if self.state.capturing && self.state.settings.mode == "blend" {
+                    self.lose_blend_source(false);
+                } else if self.state.capturing && self.state.settings.mode == "music" {
                     self.interrupt_capture();
                 }
             }
@@ -385,6 +412,12 @@ impl Engine {
             _ => return Err("Select Screen or Music before starting capture".into()),
         }
         self.state.capturing = true;
+        if self.state.settings.mode == "blend" {
+            self.blend_sources = (
+                crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                crate::audio::source_signature(self.state.settings.audio_source == "system").ok(),
+            );
+        }
         self.source_signature = self.current_source_signature().ok();
         self.source_check = Instant::now();
         Ok(())
@@ -630,14 +663,55 @@ impl Engine {
         }
         if self.state.capturing && self.source_check.elapsed() >= Duration::from_secs(2) {
             self.source_check = Instant::now();
-            let signature = self.current_source_signature();
-            if signature.as_ref().ok() != self.source_signature.as_ref() {
-                if matches!(self.state.settings.mode.as_str(), "screen" | "blend") {
-                    self.system_event(SystemEvent::SourcesChanged);
-                } else {
-                    self.interrupt_capture();
+            if self.state.settings.mode == "blend" {
+                let sources = (
+                    crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                    crate::audio::source_signature(self.state.settings.audio_source == "system")
+                        .ok(),
+                );
+                if self.screen.is_some() && sources.0 != self.blend_sources.0 {
+                    self.lose_blend_source(true);
                 }
-                self.state.error = "Capture source changed. Waiting to reconnect.".into();
+                if self.audio.is_some() && sources.1 != self.blend_sources.1 {
+                    self.lose_blend_source(false);
+                }
+                self.blend_sources = sources;
+            } else {
+                let signature = self.current_source_signature();
+                if signature.as_ref().ok() != self.source_signature.as_ref() {
+                    if matches!(self.state.settings.mode.as_str(), "screen" | "blend") {
+                        self.system_event(SystemEvent::SourcesChanged);
+                    } else {
+                        self.interrupt_capture();
+                    }
+                    self.state.error = "Capture source changed. Waiting to reconnect.".into();
+                }
+            }
+        }
+        if self.state.settings.mode == "blend"
+            && self.state.capturing
+            && self.life.active(&self.state.settings)
+            && self.state.settings.resume_capture
+            && self.life.capture_allowed
+            && (self.screen.is_none() || self.audio.is_none())
+            && self.capture_retry.elapsed() >= Duration::from_secs(3)
+        {
+            self.capture_retry = Instant::now();
+            if crate::platform::check_capture_permission(&self.state.settings).is_ok() {
+                if self.screen.is_none() {
+                    self.screen = ScreenCapture::start(&self.state.settings.screen_id).ok();
+                }
+                if self.audio.is_none() {
+                    self.audio = Audio::start(self.state.settings.audio_source == "system").ok();
+                }
+                self.blend_sources = (
+                    crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                    crate::audio::source_signature(self.state.settings.audio_source == "system")
+                        .ok(),
+                );
+                if self.screen.is_some() && self.audio.is_some() {
+                    self.state.error.clear();
+                }
             }
         }
         if self.life.active(&self.state.settings)
@@ -701,6 +775,7 @@ impl Engine {
                                     self.audio = None;
                                     self.state.audio_bands.fill(0.0);
                                     self.state.audio_level = 0.0;
+                                    self.state.audio_samples = 0;
                                     self.state.beat_level = 0.0;
                                     self.state.error = format!(
                                         "Audio unavailable; using screen colors. {e} Click Retry."
@@ -735,6 +810,7 @@ impl Engine {
                                             "Screen unavailable; using music. {e} Click Retry."
                                         );
                                         self.screen = None;
+                                        self.state.capture_size = (0, 0);
                                     }
                                 }
                             }
@@ -935,6 +1011,32 @@ mod tests {
             writes: 0,
         });
         e
+    }
+    #[test]
+    fn blend_display_changes_keep_audio_and_stop_prevents_source_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut e = simulated(
+            Settings {
+                mode: "blend".into(),
+                ..Default::default()
+            },
+            dir.path().join("settings.json"),
+        );
+        e.life.requested = true;
+        e.life.capture_allowed = true;
+        e.state.capturing = true;
+        e.audio = Some(Audio::test_tone(0.02));
+        e.system_event(SystemEvent::SourcesChanged);
+        assert!(e.audio.is_some() && e.state.capturing && e.state.requested);
+        assert!(e.state.error.contains("using music"));
+        e.lose_blend_source(false);
+        e.update_lifecycle();
+        assert!(!e.state.capturing && e.state.capture_requires_start);
+        e.action(Action::Power { on: false }).unwrap();
+        e.capture_retry = Instant::now() - Duration::from_secs(10);
+        e.tick();
+        assert!(!e.state.requested && !e.state.capturing);
+        assert!(e.audio.is_none() && e.screen.is_none());
     }
     #[test]
     fn tray_and_profile_actions_preserve_current_layout_and_stop_intent() {

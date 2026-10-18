@@ -406,8 +406,9 @@ function draw(colors) {
   const strip = $("strip-preview").getContext("2d");
   strip.clearRect(0, 0, 1000, 18);
   shown.forEach((_, i) => {
-    const j = (i + s.offset) % shown.length,
-      rgb = shown[s.reverse ? shown.length - 1 - j : j];
+    const physicalTest = runtime.calibrating && runtime.calibrationLed !== null;
+    const j = (i + (physicalTest ? 0 : s.offset)) % shown.length,
+      rgb = shown[s.reverse && !physicalTest ? shown.length - 1 - j : j];
     strip.fillStyle = `rgb(${rgb.join(",")})`;
     strip.fillRect(
       (i * 1000) / shown.length,
@@ -682,8 +683,8 @@ function initCalibration() {
   const dialog = $("calibration-dialog");
   let draft, edgePreview = false;
   async function step() {
-    if (!runtime?.calibrating) return;
-    for (const id of ["cal-count", "cal-led", "cal-offset"]) if (!$(id).reportValidity()) return;
+    if (!runtime?.calibrating) return false;
+    for (const id of ["cal-count", "cal-led", "cal-offset"]) if (!$(id).reportValidity()) return false;
     draft.count = Number($("cal-count").value);
     draft.sides = Number($("cal-sides").value);
     draft.offset = Number($("cal-offset").value);
@@ -692,6 +693,7 @@ function initCalibration() {
     $("cal-led").value = led;
     await request({ type: "calibrationStep", settings: draft, led: edgePreview ? null : led - 1 });
     $("cal-status").textContent = edgePreview ? "Mapped edges: red left · green top · blue right · amber bottom" : `Physical LED ${led} of ${draft.count}`;
+    return true;
   }
   const safe = action => async () => { try { await action(); } catch (e) { $("cal-status").textContent = String(e); } };
   $("calibrate").onclick = () => run(async () => {
@@ -711,7 +713,7 @@ function initCalibration() {
     const state = await request(stop ? { type: "power", on: false } : { type: "calibrationEnd", apply });
     settings = state.settings; dialog.close(); updateUI();
   }
-  $("cal-apply").onclick = safe(async () => { await step(); await end(true); });
+  $("cal-apply").onclick = safe(async () => { if (await step()) await end(true); });
   $("cal-cancel").onclick = safe(() => end(false));
   $("cal-stop").onclick = safe(() => end(false, true));
   dialog.addEventListener("cancel", e => { e.preventDefault(); safe(() => end(false))(); });

@@ -16,7 +16,7 @@ Physical checks are deferred at the user's request. Automated tests and successf
 3. Calibrate from both running and stopped states. Step first/last LEDs; vary count, offset, direction and coverage. Verify mapped red/green/blue/amber edges before applying. Cancel, Escape, Stop, lock, sleep and disconnect during a test. Stop must never restore an earlier running scene.
 4. Play letterboxed, pillarboxed, full-frame, dark and rapidly changing SDR video. Enable/disable bar exclusion, adjust/reset RGB, saturation and gamma. Verify crop settling, transitions, response at 10/20/30 FPS, and brightness limits. Record HDR/protected-content limitations.
 5. Play steady tones, silence, speech and percussion through system audio and microphone. Verify gain and gate behavior, beat accents, and absence of repeated beats on sustained tones. Beat pulse detects onsets; it does not estimate BPM or promise musical beat tracking.
-6. In Blend, test silence and both source failures independently. Screen failure falls back to the chosen music style; audio failure uses screen colors. Retry restores both. Stop and lifecycle permissions still apply. Existing smoothing and all brightness limits apply after blending.
+6. In Blend, test silence and both source failures independently. Screen failure falls back to the chosen music style; audio failure uses screen colors. Retry restores both. When automatic capture recovery is enabled, only the missing source is retried without interrupting the remaining source. Stop and lifecycle permissions still apply. Existing smoothing and all brightness limits apply after blending.
 
 ## Design limits
 
