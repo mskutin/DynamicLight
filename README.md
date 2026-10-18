@@ -23,15 +23,19 @@ macOS needs version 13 or newer. Linux builds target Ubuntu 24.04+; screen sync 
 
 1. Plug in your USB strip and close SyncLight.
 2. Open DynamicLight and choose a mode.
-3. For **Solid color** or **Color flow**, click **Connect strip**. For **Screen sync** or **Music**, click **Start capture**—it connects and turns on the strip for you.
+3. For **Color** or **Effects**, click **Connect strip**. For **Screen** or **Music**, click **Start capture**—it connects and turns on the strip for you.
 4. Adjust brightness. Open **Strip setup & behavior** if you need to change the number or order of LEDs.
 
 | Mode | What it does |
 | --- | --- |
-| Solid color | One color, at your chosen brightness |
-| Screen sync | Colors from the edges of your screen |
-| Music | Lighting that reacts to computer audio or your microphone |
-| Color flow | A slowly moving rainbow |
+| Color | One color, at your chosen brightness |
+| Screen | Colors from the edges of your screen |
+| Music | Spectrum, bass pulse, level meter, or color wave from computer audio or your microphone |
+| Effects | Color flow, aurora, breathe, comet, or ember, with adjustable speed |
+
+Tune music with sensitivity, a noise gate, and fade-out controls. Choose an Aurora, Ocean, Sunset, or custom-color palette. Changes reach the lighting engine while you drag; settings save when you pause.
+
+The live canvas previews outgoing LED colors. **Live activity** shows USB frame rate, successful writes, and audio input. The controller cannot report whether the physical LEDs are lit.
 
 Closing the window keeps lighting running. Choose **Quit DynamicLight** to exit. After sleep, click **Start capture** again to resume screen or music lighting.
 

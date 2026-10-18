@@ -3,6 +3,7 @@ mod capture;
 #[cfg(target_os = "windows")]
 mod capture_windows;
 mod device;
+mod effects;
 mod engine;
 mod lighting;
 #[cfg(target_os = "linux")]
