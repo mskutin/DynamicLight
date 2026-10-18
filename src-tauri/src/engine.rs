@@ -20,6 +20,17 @@ use std::{
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Action {
     Snapshot,
+    #[serde(skip)]
+    ApplyProfile {
+        settings: Settings,
+    },
+    #[serde(skip)]
+    Adjust {
+        brightness: Option<u8>,
+        color: Option<String>,
+    },
+    #[serde(skip)]
+    Toggle,
     Start,
     CalibrationStart,
     CalibrationStep {
@@ -430,6 +441,29 @@ impl Engine {
         let persist = matches!(action, Action::Settings { .. });
         match action {
             Action::Snapshot => {}
+            Action::ApplyProfile { settings } => {
+                let settings = crate::profiles::scene(&settings, &self.state.settings);
+                self.action(Action::Settings { settings })?;
+                return self.action(Action::Start);
+            }
+            Action::Adjust { brightness, color } => {
+                let mut settings = self.state.settings.clone();
+                if let Some(brightness) = brightness {
+                    settings.brightness = brightness;
+                }
+                if let Some(color) = color {
+                    settings.mode = "solid".into();
+                    settings.color = color;
+                }
+                return self.action(Action::Settings { settings });
+            }
+            Action::Toggle => {
+                return self.action(if self.life.requested {
+                    Action::Power { on: false }
+                } else {
+                    Action::Start
+                })
+            }
             Action::CalibrationStart => {
                 if self.calibration.is_none() {
                     if !self.life.pause_reason(&self.state.settings).is_empty() {
@@ -901,6 +935,51 @@ mod tests {
             writes: 0,
         });
         e
+    }
+    #[test]
+    fn tray_and_profile_actions_preserve_current_layout_and_stop_intent() {
+        let dir = tempfile::tempdir().unwrap();
+        let current = Settings {
+            count: 37,
+            max_brightness: 15,
+            ..Default::default()
+        };
+        let mut e = simulated(current.clone(), dir.path().join("settings.json"));
+        e.action(Action::ApplyProfile {
+            settings: Settings {
+                brightness: 90,
+                count: 100,
+                max_brightness: 100,
+                restore_on_start: true,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+        assert!(e.state.requested);
+        assert_eq!(e.state.settings.count, 37);
+        assert_eq!(e.state.settings.max_brightness, 15);
+        assert!(!e.state.settings.restore_on_start);
+        e.action(Action::Adjust {
+            brightness: Some(25),
+            color: None,
+        })
+        .unwrap();
+        assert_eq!(e.state.settings.brightness, 25);
+        assert_eq!(e.state.settings.count, 37);
+        e.action(Action::Toggle).unwrap();
+        assert!(!e.state.requested);
+        e.action(Action::Adjust {
+            brightness: Some(50),
+            color: None,
+        })
+        .unwrap();
+        assert!(!e.state.requested);
+        e.action(Action::CalibrationStart).unwrap();
+        assert!(e
+            .action(Action::ApplyProfile { settings: current })
+            .is_err());
+        e.action(Action::Toggle).unwrap();
+        assert!(!e.state.calibrating && !e.state.requested);
     }
     #[test]
     fn calibration_is_temporary_and_stop_cancels_restoration() {

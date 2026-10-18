@@ -141,21 +141,23 @@ fn dispatch(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
         return Ok(());
     }
     let handle = app.state::<Handle>();
-    let state = handle.request(Action::Snapshot)?;
     let next = match id {
-        "toggle" if state.requested => handle.request(Action::Power { on: false })?,
-        "toggle" | "retry" => handle.request(Action::Start)?,
+        "toggle" => handle.request(Action::Toggle)?,
+        "retry" => handle.request(Action::Start)?,
         _ => {
-            let mut settings = state.settings;
             if let Some(n) = id.strip_prefix("brightness:") {
-                settings.brightness = n.parse().map_err(|_| "Invalid brightness")?;
+                handle.request(Action::Adjust {
+                    brightness: Some(n.parse().map_err(|_| "Invalid brightness")?),
+                    color: None,
+                })?
             } else if let Some(color) = id.strip_prefix("color:") {
-                settings.mode = "solid".into();
-                settings.color = color.into();
+                handle.request(Action::Adjust {
+                    brightness: None,
+                    color: Some(color.into()),
+                })?
             } else {
                 return Ok(());
             }
-            handle.request(Action::Settings { settings })?
         }
     };
     let _ = app.emit("external-settings", next);

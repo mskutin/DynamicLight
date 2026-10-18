@@ -97,12 +97,10 @@ pub fn apply(app: &tauri::AppHandle, id: &str) -> Result<Snapshot, String> {
         .cloned()
         .ok_or("Profile no longer exists")?;
     let handle = app.state::<Handle>();
-    let current = handle.request(Action::Snapshot)?;
-    handle.request(Action::Settings {
-        settings: scene(&p.settings, &current.settings),
-    })?;
     // Deliberate profile selection is a Start; OS permission checks still apply.
-    let state = handle.request(Action::Start)?;
+    let state = handle.request(Action::ApplyProfile {
+        settings: p.settings,
+    })?;
     let _ = app.emit("external-settings", &state);
     Ok(state)
 }

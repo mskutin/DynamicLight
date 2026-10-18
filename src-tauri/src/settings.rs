@@ -160,6 +160,12 @@ mod tests {
             r#"{"speed":0}"#,
             r#"{"noiseFloor":21}"#,
             r#"{"release":101}"#,
+            r#"{"inputGain":25}"#,
+            r#"{"rgbBalance":[100,201,100]}"#,
+            r#"{"gamma":0}"#,
+            r#"{"maxBrightness":101}"#,
+            r#"{"transitionLimit":501}"#,
+            r#"{"blend":101}"#,
         ] {
             assert!(serde_json::from_str::<Settings>(patch)
                 .and_then(|s| s.validate().map_err(serde::de::Error::custom))
