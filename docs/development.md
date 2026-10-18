@@ -33,5 +33,3 @@ Linux CI also exercises computer-audio input against a PulseAudio null sink, X11
 Settings are atomically saved under the OS application-data directory in `com.dynamiclight.desktop/settings.json`. On first launch, valid settings from the Electron prototype's `dynamiclight/settings.json` are imported. Legacy display IDs reset to the primary display because native display IDs differ. The old file is retained.
 
 Protocol references: [HdrBridge wire format](https://github.com/GetTheNya/HdrBridge/blob/main/node_strip_test.js), [SyncLight RB commands](https://github.com/jakebuild/synclight), and [section command investigation](https://github.com/tanmaster/light-control).
-
-

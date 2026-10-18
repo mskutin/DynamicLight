@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 bundle=src-tauri/target/x86_64-unknown-linux-gnu/release/bundle
+cp src-tauri/linux/69-dynamiclight.rules "$bundle/69-dynamiclight.rules"
 package=$(find "$bundle/deb" -maxdepth 1 -name '*.deb' -print -quit)
 test -n "$package"
 scratch=$(mktemp -d)

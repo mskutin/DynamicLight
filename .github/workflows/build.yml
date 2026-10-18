@@ -43,6 +43,7 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.target }}
+          cache-on-failure: true
       - run: npm install --global pnpm@11.25.0
       - run: pnpm install --frozen-lockfile
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
@@ -72,5 +73,5 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-            src-tauri/linux/69-dynamiclight.rules
+            src-tauri/target/${{ matrix.target }}/release/bundle/69-dynamiclight.rules
           if-no-files-found: error

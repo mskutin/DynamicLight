@@ -39,7 +39,7 @@ impl SystemAudio {
             while output.read_exact(&mut bytes).is_ok() {
                 if stop.load(Ordering::Relaxed) { break; }
                 if let Ok(mut samples) = feed.lock() {
-                    samples.push(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+                    samples.push(bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)));
                 }
                 if first { let _ = ready.send(()); first = false; }
             }

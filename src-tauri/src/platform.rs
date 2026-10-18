@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "linux"))]
 use crate::engine::Handle;
 
 #[cfg(target_os = "windows")]
