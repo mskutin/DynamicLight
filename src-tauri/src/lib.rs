@@ -272,6 +272,8 @@ pub fn run() {
                 let app = app.clone();
                 tauri::async_runtime::spawn_blocking(move || {
                     let _ = handle.request(Action::Shutdown);
+                    #[cfg(target_os = "linux")]
+                    crate::linux::stop_watchers();
                     app.exit(0);
                 });
             }
