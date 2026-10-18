@@ -8,17 +8,21 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
   const root = path.resolve("src/ui");
   const server = http.createServer((req, res) => {
     const name = req.url === "/" ? "index.html" : req.url.slice(1);
-    if (!["index.html", "style.css", "renderer.js"].includes(name)) {
+    if (
+      !["index.html", "style.css", "renderer.js", "icon.svg"].includes(name)
+    ) {
       res.writeHead(404).end();
       return;
     }
     res.setHeader(
       "Content-Type",
-      name.endsWith(".css")
-        ? "text/css"
-        : name.endsWith(".js")
-          ? "text/javascript"
-          : "text/html",
+      name.endsWith(".svg")
+        ? "image/svg+xml"
+        : name.endsWith(".css")
+          ? "text/css"
+          : name.endsWith(".js")
+            ? "text/javascript"
+            : "text/html",
     );
     // Match the application's CSP, including the absence of unsafe-inline.
     res.setHeader(
@@ -114,6 +118,17 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         },
         core: {
           invoke: async (cmd, args) => {
+            if (cmd === "effect_previews") {
+              window.fixture.previewCalls =
+                (window.fixture.previewCalls || 0) + 1;
+              return Array.from({ length: 5 }, (_, e) =>
+                Array.from({ length: 48 }, (_, i) => [
+                  60 + e * 35,
+                  120 + Math.round(70 * Math.sin(i / 8 + args.seconds)),
+                  190,
+                ]),
+              );
+            }
             if (cmd === "platform_name") return "windows";
             if (cmd === "displays")
               return [{ id: "test", name: "Test display" }];
@@ -124,10 +139,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
             if (a.settings) {
               if (
                 state.settings.mode !== a.settings.mode ||
-                state.settings.audioSource !== a.settings.audioSource
+                state.settings.audioSource !== a.settings.audioSource ||
+                state.settings.screenId !== a.settings.screenId
               )
                 state.capturing = false;
               state.settings = structuredClone(a.settings);
+            }
+            if (a.type === "connect" && fixture.failConnect) {
+              fixture.failConnect = false;
+              throw new Error("Test USB unavailable");
+            }
+            if (a.type === "startCapture" && fixture.failCapture) {
+              fixture.failCapture = false;
+              throw new Error("Test capture denied");
             }
             if (a.type === "connect")
               state.status = {
@@ -155,6 +179,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
       () => typeof settings !== "undefined" && settings,
     );
     assert.match(await page.locator("#frame-rate").innerText(), /Preview only/);
+    assert.equal(
+      await page.evaluate(() =>
+        fixture.calls.some((a) => ["connect", "startCapture"].includes(a.type)),
+      ),
+      false,
+      "Startup never captures implicitly",
+    );
     // Drag bursts must coalesce, apply immediately, and persist once at idle.
     await page.evaluate(() => {
       fixture.calls.length = 0;
@@ -180,12 +211,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     assert.equal(edits.at(-1).settings.brightness, 100);
     await page.locator('[data-mode="rainbow"]').click();
     await page.waitForFunction(() => !busy);
+    assert(
+      await page.evaluate(
+        () => fixture.state.status.connected && fixture.state.powered,
+      ),
+      "One effect-mode click connects and powers on",
+    );
     for (const effect of ["rainbow", "aurora", "breath", "comet", "ember"]) {
       await page.locator(`[data-effect="${effect}"]`).click();
       await page.waitForFunction(
         (effect) => fixture.state.settings.effect === effect,
         effect,
       );
+      await page.waitForFunction(() => !busy);
       assert.equal(
         await page.locator("#palette").isDisabled(),
         ["rainbow", "ember"].includes(effect),
@@ -195,6 +233,17 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     await page.waitForFunction(
       () => document.getElementById("save-state").textContent === "Saved",
     );
+    await page.waitForFunction(() => fixture.previewCalls > 2);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForTimeout(300);
+    const frozenCalls = await page.evaluate(() => fixture.previewCalls);
+    await page.waitForTimeout(350);
+    assert.equal(
+      await page.evaluate(() => fixture.previewCalls),
+      frozenCalls,
+      "Reduced motion stops thumbnail animation",
+    );
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     fs.mkdirSync(".local", { recursive: true });
     await page.screenshot({ path: ".local/ui-effects.png", fullPage: true });
     for (const width of [1440, 1180, 880, 650, 540, 390]) {
@@ -215,6 +264,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     await page.locator('[data-mode="music"]').click();
     await page.waitForFunction(() => !busy);
     assert.equal(await page.locator("#music-controls").isVisible(), true);
+    assert(
+      await page.evaluate(() => fixture.state.capturing),
+      "Music starts with one mode click",
+    );
     assert.equal(await page.locator("#display-controls").isVisible(), false);
     for (const style of ["spectrum", "bass", "vu", "wave"]) {
       await page.locator(`[data-music="${style}"]`).click();
@@ -222,10 +275,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         (style) => fixture.state.settings.musicStyle === style,
         style,
       );
+      await page.waitForFunction(() => !busy);
     }
     await page.locator("#power").click();
     await page.waitForFunction(() => !busy);
-    await page.locator("#capture").click();
+    await page.locator("#power").click();
     await page.waitForFunction(() => !busy);
     assert(
       await page.evaluate(
@@ -235,6 +289,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
           fixture.state.capturing,
       ),
       "Capture auto connects and powers on",
+    );
+    await page.locator("#audio-source").selectOption("microphone");
+    await page.waitForFunction(() => !busy);
+    assert(
+      await page.evaluate(
+        () =>
+          fixture.state.capturing &&
+          fixture.state.settings.audioSource === "microphone",
+      ),
+      "Active source change restarts capture",
     );
     await page.evaluate(() => {
       Object.assign(fixture.state, {
@@ -252,6 +316,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
       });
       fixture.emit();
     });
+    await page.locator(".telemetry summary").click();
     assert.equal(await page.locator("#usb-fps").innerText(), "29");
     assert.equal(await page.locator("#audio-level").innerText(), "25% RMS");
     assert.equal(await page.locator("#write-errors").innerText(), "2");
@@ -265,9 +330,50 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     assert.equal(await page.locator("#music-controls").isVisible(), false);
     await page.locator("#refresh-screens").click();
     await page.waitForFunction(() => !busy);
-    assert.equal(await page.locator("#screen").inputValue(), "test");
-    await page.locator('a[href="#setup"]').click();
+    assert.equal(await page.locator("#screen").inputValue(), "");
+    await page.locator("#screen").selectOption("test");
+    await page.waitForFunction(() => !busy);
+    assert(
+      await page.evaluate(
+        () =>
+          fixture.state.capturing && fixture.state.settings.screenId === "test",
+      ),
+      "Active display change resumes capture",
+    );
+    await page.locator("#setup summary").click();
     assert.equal(await page.locator("#count").isVisible(), true);
+    await page.evaluate(() => {
+      fixture.state.status.connected = false;
+      fixture.state.capturing = false;
+      fixture.state.powered = false;
+      fixture.failConnect = true;
+      fixture.emit();
+    });
+    await page.locator("#power").click();
+    await page.waitForFunction(() => !busy);
+    assert.match(
+      await page.locator("#notice").innerText(),
+      /Test USB unavailable/,
+    );
+    assert.match(await page.locator("#power").innerText(), /Start/);
+    await page.locator("#power").click();
+    await page.waitForFunction(() => !busy);
+    assert(
+      await page.evaluate(() => fixture.state.capturing),
+      "Retry recovers in one click",
+    );
+    await page.locator("#power").click();
+    await page.waitForFunction(() => !busy);
+    await page.evaluate(() => {
+      fixture.failCapture = true;
+    });
+    await page.locator("#power").click();
+    await page.waitForFunction(() => !busy);
+    assert.match(
+      await page.locator("#notice").innerText(),
+      /Test capture denied/,
+    );
+    assert.match(await page.locator("#power").innerText(), /Start/);
     // Error text is escaped; recovery removes only the previous engine error.
     await page.evaluate(() => {
       fixture.state.error = "<img src=x onerror=alert(1)>";

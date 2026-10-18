@@ -24,18 +24,6 @@ const effectLabels = {
   comet: "Comet",
   ember: "Ember",
 };
-const captions = {
-  solid: "A steady glow, exactly how you like it.",
-  screen: "Your screen, extended into your space.",
-  music: "Sound becomes color. Make it your own.",
-  rainbow: "A little movement changes everything.",
-};
-const titles = {
-  solid: "Set the atmosphere.",
-  screen: "Go beyond the screen.",
-  music: "Give your sound a new dimension.",
-  rainbow: "Find your flow.",
-};
 const ranges = {
   brightness: "brightness",
   sensitivity: "sensitivity",
@@ -71,25 +59,20 @@ function renderRuntime(value) {
   $("status-dot").classList.toggle("connected", connected);
   $("live-dot").classList.toggle("active", active);
   $("status-label").textContent = connected ? "Connected" : "Not connected";
-  $("connect").textContent = connected ? "Disconnect ↗" : "Connect strip ↗";
+  $("connect").textContent = connected ? "Disconnect" : "Reconnect";
   $("connection-message").textContent = value.status.message;
-  $("power").classList.toggle("off", !value.powered);
-  $("power").setAttribute("aria-pressed", value.powered);
-  $("power").querySelector("span").textContent = !value.powered
-    ? "Turn lights on"
-    : !connected || waiting
-      ? "Power enabled"
-      : "Turn lights off";
+  const running = isRunning(value);
+  $("power").classList.toggle("running", running);
+  $("power").setAttribute("aria-pressed", running);
+  $("power").querySelector("span").textContent = busy
+    ? "Working…"
+    : running
+      ? "Stop"
+      : `Start ${labels[settings.mode].toLowerCase()}`;
   $("power").setAttribute(
     "aria-label",
-    value.powered ? "Turn lights off" : "Turn lights on",
+    running ? "Stop lighting" : `Start ${labels[settings.mode].toLowerCase()}`,
   );
-  $("capture").textContent = value.capturing
-    ? "Stop capture"
-    : connected
-      ? "Start capture"
-      : "Connect & start capture";
-  $("capture").disabled = busy;
   $("frame-rate").textContent = !connected
     ? "Disconnected · Preview only"
     : !value.powered
@@ -156,8 +139,6 @@ function updateUI() {
     settings.mode === "rainbow"
       ? effectLabels[settings.effect]
       : labels[settings.mode];
-  $("preview-title").textContent = titles[settings.mode];
-  $("preview-caption").textContent = captions[settings.mode];
   $("color").value = settings.color;
   $("hex-value").textContent = settings.color.toUpperCase();
   for (const [id, key] of Object.entries(ranges)) {
@@ -176,15 +157,14 @@ function updateUI() {
   $("display-controls").hidden = settings.mode !== "screen";
   $("music-controls").hidden = settings.mode !== "music";
   $("effect-controls").hidden = settings.mode !== "rainbow";
-  $("solid-hint").hidden = settings.mode !== "solid";
   $("palette-controls").hidden = !["music", "rainbow"].includes(settings.mode);
   const fixedPalette =
     settings.mode === "rainbow" &&
     ["rainbow", "ember"].includes(settings.effect);
-  $("palette").disabled = fixedPalette;
+  $("palette").disabled = busy || fixedPalette;
   $("palette-help").textContent = fixedPalette
-    ? "This effect has its own signature colors."
-    : "Applies to your selected music style or effect.";
+    ? "Fixed colors for this effect."
+    : "";
   $("color-control").hidden =
     settings.mode === "screen" ||
     (settings.mode !== "solid" &&
@@ -192,8 +172,8 @@ function updateUI() {
   $("speed-controls").hidden =
     settings.mode !== "rainbow" &&
     !(settings.mode === "music" && settings.musicStyle === "wave");
-  $("smoothing").disabled = settings.mode === "solid";
-  $("screen").disabled = settings.mode !== "screen";
+  $("smoothing").disabled = busy || settings.mode === "solid";
+  $("screen").disabled = busy || settings.mode !== "screen";
   $("refresh-screens").disabled = busy || settings.mode !== "screen";
   $("capture-help").textContent =
     settings.mode === "screen"
@@ -210,6 +190,7 @@ function updateUI() {
             ? "Allow Screen & System Audio Recording for computer audio, or Microphone access for your mic."
             : "Computer audio follows your speakers. Microphone listens to your room.");
   if (runtime) renderRuntime(runtime);
+  refreshEffectPreviews();
 }
 // Coalesce drag updates: at most one preview IPC in flight, then the newest value.
 // Disk writes happen after the user pauses, not on each animation frame.
@@ -263,13 +244,19 @@ function changed() {
 async function run(action) {
   if (busy) return;
   busy = true;
-  const controls = ["connect", "power", "capture", "refresh-screens"];
+  document.querySelectorAll("input, select").forEach((input) => {
+    input.disabled = true;
+  });
+  const controls = ["connect", "power", "refresh-screens"];
   controls.forEach((id) => {
     $(id).disabled = true;
   });
-  document.querySelectorAll("[data-mode]").forEach((button) => {
-    button.disabled = true;
-  });
+  document
+    .querySelectorAll("[data-mode], [data-effect], [data-music]")
+    .forEach((button) => {
+      button.disabled = true;
+    });
+  $("power").querySelector("span").textContent = "Working…";
   notice("");
   try {
     await action();
@@ -277,12 +264,17 @@ async function run(action) {
     notice(String(error), true);
   } finally {
     busy = false;
+    document.querySelectorAll("input, select").forEach((input) => {
+      input.disabled = false;
+    });
     controls.forEach((id) => {
       $(id).disabled = false;
     });
-    document.querySelectorAll("[data-mode]").forEach((button) => {
-      button.disabled = false;
-    });
+    document
+      .querySelectorAll("[data-mode], [data-effect], [data-music]")
+      .forEach((button) => {
+        button.disabled = false;
+      });
     updateUI();
   }
 }
@@ -341,37 +333,24 @@ function draw(colors) {
   gradient.addColorStop(1, "#10191e");
   ctx.fillStyle = gradient;
   ctx.fillRect(257, 76, 486, 232);
-  ctx.strokeStyle = "#849c9830";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 6; i++) {
-    ctx.beginPath();
-    ctx.ellipse(500, 190, 45 + i * 21, 36 + i * 8, -0.35, 0, Math.PI * 2);
-    ctx.stroke();
-  }
   ctx.fillStyle = "#d5e7e0";
-  ctx.font = "500 23px Segoe UI";
+  ctx.font = "500 24px Segoe UI";
   ctx.textAlign = "center";
   ctx.fillText(
-    !runtime.powered
-      ? "Lights off"
-      : ["screen", "music"].includes(s.mode) && !runtime.capturing
-        ? "Ready when you are"
-        : s.mode === "rainbow"
-          ? effectLabels[s.effect]
-          : labels[s.mode],
+    s.mode === "rainbow" ? effectLabels[s.effect] : labels[s.mode],
     500,
-    187,
+    184,
   );
-  ctx.font = "11px Segoe UI";
-  ctx.fillStyle = "#94b3aa";
+  ctx.font = "14px Segoe UI";
+  ctx.fillStyle = "#94a8b2";
   ctx.fillText(
-    !runtime.status.connected
-      ? "CONNECT YOUR STRIP TO BRING IT TO LIFE"
-      : ["screen", "music"].includes(s.mode) && !runtime.capturing
-        ? "START CAPTURE BELOW"
-        : "YOUR SPACE, REIMAGINED",
+    isRunning(runtime)
+      ? s.brightness === 0
+        ? "Brightness is 0%"
+        : "Running"
+      : "Stopped · select a mode to start",
     500,
-    213,
+    216,
   );
   shown.forEach((rgb, i) => {
     const [x, y] = points[i];
@@ -418,11 +397,129 @@ function drawSpectrum(bands) {
   });
   ctx.globalAlpha = 1;
 }
+
+function isRunning(value) {
+  return (
+    value?.status.connected &&
+    value.powered &&
+    (!["screen", "music"].includes(value.settings.mode) || value.capturing)
+  );
+}
+async function startLighting() {
+  await save();
+  if (!runtime.status.connected) await request({ type: "connect" });
+  if (!runtime.powered) await request({ type: "power", on: true });
+  if (["screen", "music"].includes(settings.mode) && !runtime.capturing)
+    await request({ type: "startCapture" });
+}
+function changeSource(key, value) {
+  const resume = isRunning(runtime);
+  return run(async () => {
+    settings[key] = value;
+    if (resume) await startLighting();
+    else await save();
+  });
+}
+async function refreshDisplays() {
+  const screens = await invoke("displays");
+  $("screen").replaceChildren();
+  const primary = document.createElement("option");
+  primary.value = "";
+  primary.textContent = "Primary display";
+  $("screen").append(primary);
+  for (const screen of screens) {
+    const option = document.createElement("option");
+    option.value = screen.id;
+    option.textContent = screen.name;
+    $("screen").append(option);
+  }
+  if (
+    settings.screenId &&
+    !screens.some((screen) => screen.id === settings.screenId)
+  ) {
+    const missing = document.createElement("option");
+    missing.value = settings.screenId;
+    missing.textContent = "Saved display (unavailable)";
+    $("screen").append(missing);
+  }
+  $("screen").value = settings.screenId;
+}
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let thumbnailTimer,
+  thumbnailBusy = false,
+  thumbnailsVisible = true,
+  thumbnailsFocused = true;
+async function refreshEffectPreviews() {
+  clearTimeout(thumbnailTimer);
+  if (
+    !settings ||
+    thumbnailBusy ||
+    $("effect-controls").hidden ||
+    !thumbnailsVisible ||
+    !thumbnailsFocused ||
+    document.hidden
+  )
+    return;
+  thumbnailBusy = true;
+  const key = JSON.stringify(settings);
+  try {
+    const frames = await invoke("effect_previews", {
+      settings: { ...settings },
+      seconds: reducedMotion.matches ? 2 : (performance.now() / 1000) % 86400,
+    });
+    if (!$("effect-controls").hidden)
+      document
+        .querySelectorAll(".effect-art")
+        .forEach((canvas, i) => drawEffectThumbnail(canvas, frames[i]));
+  } catch (error) {
+    notice("Effect preview unavailable: " + String(error), true);
+  } finally {
+    thumbnailBusy = false;
+    if (!reducedMotion.matches || key !== JSON.stringify(settings))
+      thumbnailTimer = setTimeout(refreshEffectPreviews, 100);
+  }
+}
+function drawEffectThumbnail(canvas, colors) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 240, 150);
+  const points = positions(colors.length, 3);
+  // Lit segments and their spill follow the actual native effect samples.
+  ctx.fillStyle = "#101b21";
+  ctx.strokeStyle = "#2b3b43";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(43, 37, 154, 76, 5);
+  ctx.fill();
+  ctx.stroke();
+  colors.forEach((rgb, i) => {
+    const [x, y] = points[i],
+      px = 34 + x * 172,
+      py = 28 + y * 94;
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, 24);
+    glow.addColorStop(0, `rgba(${rgb.join(",")},.22)`);
+    glow.addColorStop(1, `rgba(${rgb.join(",")},0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(px - 24, py - 24, 48, 48);
+  });
+  colors.forEach((rgb, i) => {
+    const [x, y] = points[i];
+    ctx.fillStyle = rgb.some((c) => c > 1)
+      ? `rgb(${rgb.join(",")})`
+      : "#29363c";
+    ctx.beginPath();
+    ctx.roundRect(32 + x * 172, 26 + y * 94, 4, 4, 1.2);
+    ctx.fill();
+  });
+  ctx.fillStyle = "#2b3b43";
+  ctx.fillRect(117, 114, 6, 9);
+  ctx.fillRect(104, 123, 32, 2);
+}
+
 async function init() {
   platform = await invoke("platform_name");
   if (platform === "linux")
     $("close-behavior").textContent =
-      "Closing the window minimizes it and keeps lighting running. Use Quit DynamicLight to exit.";
+      "Closing the window minimizes it and keeps lighting running. Use Quit to exit.";
   await window.__TAURI__.event.listen("lighting", (event) =>
     renderRuntime(event.payload),
   );
@@ -438,30 +535,42 @@ async function init() {
     });
   $("power").onclick = () =>
     run(async () => {
-      await save();
-      await request({ type: "power", on: !runtime.powered });
+      if (isRunning(runtime)) {
+        await save();
+        await request({ type: "power", on: false });
+      } else await startLighting();
     });
   document.querySelectorAll("[data-mode]").forEach((button) => {
+    button.setAttribute(
+      "aria-label",
+      `Start ${labels[button.dataset.mode].toLowerCase()}`,
+    );
     button.onclick = () =>
       run(async () => {
         settings.mode = button.dataset.mode;
-        await save();
-        if (["screen", "music"].includes(settings.mode))
-          notice("Choose your source, then start capture.");
+        updateUI();
+        await startLighting();
+        if (settings.mode === "screen") await refreshDisplays();
       });
   });
   for (const [selector, dataset, key] of [
     ["[data-effect]", "effect", "effect"],
     ["[data-music]", "music", "musicStyle"],
-    ["[data-color]", "color", "color"],
-  ]) {
+  ])
     document.querySelectorAll(selector).forEach((button) => {
-      button.onclick = () => {
-        settings[key] = button.dataset[dataset];
-        changed();
-      };
+      button.onclick = () =>
+        run(async () => {
+          settings[key] = button.dataset[dataset];
+          updateUI();
+          await startLighting();
+        });
     });
-  }
+  document.querySelectorAll("[data-color]").forEach((button) => {
+    button.onclick = () => {
+      settings.color = button.dataset.color;
+      changed();
+    };
+  });
   $("color").oninput = (event) => {
     settings.color = event.target.value;
     changed();
@@ -491,52 +600,33 @@ async function init() {
       settings[key] = event.target.checked;
       changed();
     };
-  $("audio-source").onchange = (event) => {
-    settings.audioSource = event.target.value;
-    changed();
-    notice("Start capture to use the selected audio source.");
-  };
-  $("screen").onchange = (event) => {
-    settings.screenId = event.target.value;
-    changed();
-    notice("Start capture to use the selected display.");
-  };
-  $("refresh-screens").onclick = () =>
-    run(async () => {
-      const screens = await invoke("displays");
-      $("screen").replaceChildren();
-      for (const screen of screens) {
-        const option = document.createElement("option");
-        option.value = screen.id;
-        option.textContent = screen.name;
-        $("screen").append(option);
-      }
-      if (screens.some((screen) => screen.id === settings.screenId))
-        $("screen").value = settings.screenId;
-      else {
-        settings.screenId = screens[0]?.id || "";
-        await save();
-      }
-    });
-  $("capture").onclick = () =>
-    run(async () => {
-      await save();
-      if (runtime.capturing) {
-        await request({ type: "stopCapture" });
-        return;
-      }
-      if (!runtime.status.connected) await request({ type: "connect" });
-      if (!runtime.powered) await request({ type: "power", on: true });
-      await request({ type: "startCapture" });
-    });
+  $("audio-source").onchange = (event) =>
+    changeSource("audioSource", event.target.value);
+  $("screen").onchange = (event) =>
+    changeSource("screenId", event.target.value);
+  $("refresh-screens").onclick = () => run(refreshDisplays);
   $("quit").onclick = () =>
     run(async () => {
       await save();
       await invoke("quit");
     });
-  document.querySelector('a[href="#setup"]').onclick = () => {
-    $("setup").open = true;
-  };
+  const observer = new IntersectionObserver((entries) => {
+    thumbnailsVisible = entries[0].isIntersecting;
+    refreshEffectPreviews();
+  });
+  observer.observe($("effect-controls"));
+  window.addEventListener("blur", () => {
+    thumbnailsFocused = false;
+    clearTimeout(thumbnailTimer);
+  });
+  window.addEventListener("focus", () => {
+    thumbnailsFocused = true;
+    refreshEffectPreviews();
+  });
+  document.addEventListener("visibilitychange", refreshEffectPreviews);
+  reducedMotion.addEventListener("change", refreshEffectPreviews);
+  if (settings.mode === "screen")
+    refreshDisplays().catch((error) => notice(String(error), true));
   window.addEventListener("focus", () =>
     request({ type: "snapshot" }).catch((error) => notice(String(error), true)),
   );

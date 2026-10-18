@@ -249,8 +249,7 @@ impl Engine {
             }
             Action::Resume => {
                 self.suspended = false;
-                self.state.error =
-                    "Computer awake. Turn lights on; restart capture if needed.".into();
+                self.state.error = "Computer resumed. Click Start to resume lighting.".into();
                 self.last_solid = None;
             }
             Action::Shutdown => {
