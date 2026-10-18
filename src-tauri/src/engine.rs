@@ -623,6 +623,107 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn simulated(settings: Settings, path: PathBuf) -> Engine {
+        let mut e = Engine::new(settings, path, String::new());
+        e.controller.test_bus = Some(crate::device::TestBus {
+            online: true,
+            connects: 0,
+            writes: 0,
+        });
+        e
+    }
+    #[test]
+    fn usb_failure_retries_only_after_delay_and_stop_cancels_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut e = simulated(
+            Settings {
+                mode: "rainbow".into(),
+                ..Default::default()
+            },
+            dir.path().join("settings.json"),
+        );
+        e.action(Action::Start).unwrap();
+        e.tick();
+        assert_eq!(e.controller.test_bus.as_ref().unwrap().connects, 1);
+        e.controller.test_bus.as_mut().unwrap().online = false;
+        e.tick();
+        assert!(e.state.requested && e.state.recovering);
+        assert_eq!(e.state.write_errors, 1);
+        let sent = e.state.frames_written;
+        e.controller.test_bus.as_mut().unwrap().online = true;
+        e.tick();
+        assert_eq!(
+            e.controller.test_bus.as_ref().unwrap().connects,
+            1,
+            "no busy retry loop"
+        );
+        e.retry = Instant::now() - Duration::from_secs(3);
+        e.tick();
+        assert!(e.state.status.connected);
+        assert!(e.state.frames_written > sent);
+        assert!(!e.state.recovering);
+        assert!(e.state.error.is_empty());
+        e.controller.test_bus.as_mut().unwrap().online = false;
+        e.tick();
+        e.action(Action::Power { on: false }).unwrap();
+        e.controller.test_bus.as_mut().unwrap().online = true;
+        e.retry = Instant::now() - Duration::from_secs(3);
+        e.tick();
+        assert_eq!(e.controller.test_bus.as_ref().unwrap().connects, 2);
+        assert!(!e.state.requested && !e.state.status.connected);
+    }
+    #[test]
+    fn startup_waits_for_initial_desktop_state_and_respects_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        SavedIntent { running: true }
+            .save(&path.with_file_name("run-state.json"))
+            .unwrap();
+        let mut e = simulated(
+            Settings {
+                restore_on_start: true,
+                ..Default::default()
+            },
+            path,
+        );
+        e.restore();
+        e.retry = Instant::now() - Duration::from_secs(10);
+        e.tick();
+        assert_eq!(e.controller.test_bus.as_ref().unwrap().connects, 0);
+        e.system_event(SystemEvent::Locked(true));
+        e.system_event(SystemEvent::Ready);
+        e.tick();
+        assert_eq!(e.controller.test_bus.as_ref().unwrap().connects, 0);
+        e.system_event(SystemEvent::Locked(false));
+        e.tick();
+        assert!(e.state.status.connected && e.state.powered);
+    }
+    #[test]
+    fn suspend_closes_usb_before_teardown_and_respects_blackout_preference() {
+        let dir = tempfile::tempdir().unwrap();
+        for blackout in [false, true] {
+            let mut e = simulated(
+                Settings {
+                    off_on_sleep: blackout,
+                    ..Default::default()
+                },
+                dir.path().join("settings.json"),
+            );
+            e.action(Action::Start).unwrap();
+            e.tick();
+            let writes = e.controller.test_bus.as_ref().unwrap().writes;
+            e.system_event(SystemEvent::Sleep(true));
+            e.tick();
+            assert!(!e.state.status.connected);
+            assert_eq!(
+                e.controller.test_bus.as_ref().unwrap().writes,
+                writes + usize::from(blackout)
+            );
+            e.system_event(SystemEvent::Sleep(false));
+            e.tick();
+            assert!(e.state.status.connected && e.state.powered);
+        }
+    }
     #[test]
     fn capture_is_never_implicit_and_sleep_requires_restart() {
         let dir = tempfile::tempdir().unwrap();
