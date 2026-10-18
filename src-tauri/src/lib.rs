@@ -5,6 +5,9 @@ mod capture_windows;
 mod device;
 mod effects;
 mod engine;
+mod lifecycle;
+#[cfg(target_os = "windows")]
+mod lifecycle_windows;
 mod lighting;
 #[cfg(target_os = "linux")]
 mod linux;
@@ -23,6 +26,21 @@ use tauri::{
     Emitter, Manager,
 };
 struct Preview(Arc<AtomicBool>);
+
+#[tauri::command]
+fn launch_at_login(app: tauri::AppHandle, enabled: Option<bool>) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if let Some(enabled) = enabled {
+        if enabled {
+            manager.enable()
+        } else {
+            manager.disable()
+        }
+        .map_err(|e| e.to_string())?;
+    }
+    manager.is_enabled().map_err(|e| e.to_string())
+}
 
 #[cfg(test)]
 mod preview_tests {
@@ -125,12 +143,17 @@ fn show(app: &tauri::AppHandle) {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .invoke_handler(tauri::generate_handler![
             control,
             displays,
             quit,
             platform_name,
-            effect_previews
+            effect_previews,
+            launch_at_login
         ])
         .setup(|app| {
             #[cfg(target_os = "windows")]
@@ -176,7 +199,10 @@ pub fn run() {
                     let _ = emitter.emit_to("main", "lighting", snapshot);
                 }
             });
-            platform::watch_power(handle.clone()).map_err(std::io::Error::other)?;
+            if let Err(e) = platform::watch_power(handle.clone()) {
+                handle.system_event(lifecycle::SystemEvent::Warning(e), false);
+                handle.system_event(lifecycle::SystemEvent::Ready, false);
+            }
             app.manage(handle);
             app.manage(AtomicBool::new(false));
             let open = MenuItem::with_id(app, "open", "Open DynamicLight", true, None::<&str>)?;
@@ -203,6 +229,18 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+            let background = std::env::args().any(|arg| arg == "--autostart");
+            if let Some(window) = app.get_webview_window("main") {
+                if !background {
+                    window.show()?;
+                }
+                #[cfg(target_os = "linux")]
+                if background {
+                    // Keep the app reachable on desktops without a tray host.
+                    window.show()?;
+                    window.minimize()?;
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
