@@ -13,6 +13,8 @@ function render(s) {
   $("quick-power").classList.toggle("running", s.requested);
   $("quick-power").setAttribute("aria-pressed", String(s.requested));
   $("quick-power").disabled = busy;
+  $("quick-pin").disabled = busy;
+  $("open-studio").disabled = busy;
   $("quick-brightness").disabled = busy || s.calibrating;
   if (!editingBrightness) { $("quick-brightness").value = s.settings.brightness; $("quick-value").textContent = s.settings.brightness + "%"; }
   $("quick-error").textContent = actionError || s.error;

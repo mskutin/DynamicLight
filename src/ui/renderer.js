@@ -761,7 +761,7 @@ function renderProfiles() {
   $("profile-list").replaceChildren();
   library.profiles.forEach((p, i) => {
     if (!sceneVisible(p, false)) return;
-    const row = document.createElement("div"); row.className = "profile-row scene-card";
+    const row = document.createElement("div"); row.className = "profile-row scene-card"; row.setAttribute("role", "group"); row.setAttribute("aria-label", p.name);
     const apply = document.createElement("button"); apply.className = "profile-apply";
     decorateScene(apply, p);
     apply.onclick = () => run(async () => { await save(); const state = await invoke("apply_profile", { id: p.id }); settings = state.settings; renderRuntime(state); });
@@ -793,7 +793,7 @@ function renderProfiles() {
   $("starter-list").replaceChildren();
   for (const p of starters.profiles) {
     if (!sceneVisible(p, true)) continue;
-    const row = document.createElement("div"); row.className = "scene-card starter-card";
+    const row = document.createElement("div"); row.className = "scene-card starter-card"; row.setAttribute("role", "group"); row.setAttribute("aria-label", p.name);
     const apply = document.createElement("button"); apply.className = "profile-apply"; decorateScene(apply,p);
     apply.onclick = () => run(async () => { await save(); const state = await invoke("apply_starter", { id:p.id }); settings = state.settings; renderRuntime(state); });
     const copy = document.createElement("button"); copy.className = "text-button"; copy.textContent = "Save a copy";
