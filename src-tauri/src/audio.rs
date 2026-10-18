@@ -140,7 +140,12 @@ impl Audio {
             rate,
         })
     }
-    pub fn analyze(&self, sensitivity: u8, noise_floor: u8) -> Result<Analysis, String> {
+    pub fn analyze(
+        &self,
+        sensitivity: u8,
+        noise_floor: u8,
+        gain_db: i8,
+    ) -> Result<Analysis, String> {
         let samples = self.feed.lock().map_err(|e| e.to_string())?;
         if let Some(ref e) = samples.error {
             return Err(e.clone());
@@ -153,14 +158,17 @@ impl Audio {
                 received,
             });
         }
-        let rms = (samples.data.iter().map(|v| v * v).sum::<f32>()
+        let gain = 10.0_f32.powf(gain_db as f32 / 20.0);
+        let rms = ((samples.data.iter().map(|v| v * v).sum::<f32>()
             / samples.data.len().max(1) as f32)
             .sqrt()
+            * gain)
             .clamp(0.0, 1.0);
         let mut data = vec![Complex::new(0.0, 0.0); SIZE];
         for (i, v) in samples.data.iter().enumerate() {
-            data[i].re =
-                *v * (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (SIZE - 1) as f32).cos());
+            data[i].re = *v
+                * gain
+                * (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (SIZE - 1) as f32).cos());
         }
         drop(samples);
         self.fft.process(&mut data);
