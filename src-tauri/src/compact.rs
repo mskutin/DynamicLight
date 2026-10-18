@@ -71,7 +71,29 @@ fn place(window: &WebviewWindow, prefs: &Preferences) -> Result<(), String> {
         .or_else(|| monitors.first().cloned());
     if let Some(monitor) = selected {
         let area = monitor.work_area();
-        let size = window.outer_size().map_err(|e| e.to_string())?;
+        let mut size = window.outer_size().map_err(|e| e.to_string())?;
+        if size.width > area.size.width || size.height > area.size.height {
+            let inner = window.inner_size().map_err(|e| e.to_string())?;
+            let border = (
+                size.width.saturating_sub(inner.width),
+                size.height.saturating_sub(inner.height),
+            );
+            // A smaller replacement monitor can be below the usual logical minimum.
+            window
+                .set_min_size(None::<tauri::PhysicalSize<u32>>)
+                .map_err(|e| e.to_string())?;
+            window
+                .set_size(tauri::PhysicalSize::new(
+                    inner
+                        .width
+                        .min(area.size.width.saturating_sub(border.0).max(1)),
+                    inner
+                        .height
+                        .min(area.size.height.saturating_sub(border.1).max(1)),
+                ))
+                .map_err(|e| e.to_string())?;
+            size = window.outer_size().map_err(|e| e.to_string())?;
+        }
         let (x, y) = clamp_position(
             if prefs.placed {
                 prefs.x

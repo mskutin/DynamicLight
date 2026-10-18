@@ -5,10 +5,11 @@ const names = { solid: "Color", screen: "Screen", music: "Music", blend: "Screen
 let state, favorites = [], busy = false, brightnessTimer, editingBrightness = false, queue = Promise.resolve(), actionError = "";
 let brightnessPreview, brightnessDirty = false;
 function serialized(task) { const next = queue.catch(() => {}).then(task); queue = next; return next; }
+function statusText(id, text) { if ($(id).textContent !== text) $(id).textContent = text; }
 function render(s) {
   state = s;
   $("quick-mode").textContent = names[s.settings.mode];
-  $("quick-status").textContent = s.pauseReason || (s.captureRequiresStart ? "Capture paused" : s.recovering ? "Reconnecting" : !s.requested ? "Stopped" : !s.status.connected ? "Disconnected" : "Running");
+  statusText("quick-status", s.pauseReason || (s.captureRequiresStart ? "Capture paused" : s.recovering ? "Reconnecting" : !s.requested ? "Stopped" : !s.status.connected ? "Disconnected" : "Running"));
   $("quick-power").textContent = s.requested ? "Stop" : "Start";
   $("quick-power").classList.toggle("running", s.requested);
   $("quick-power").setAttribute("aria-pressed", String(s.requested));
@@ -17,7 +18,7 @@ function render(s) {
   $("open-studio").disabled = busy;
   $("quick-brightness").disabled = busy || s.calibrating;
   if (!editingBrightness) { $("quick-brightness").value = s.settings.brightness; $("quick-value").textContent = s.settings.brightness + "%"; }
-  $("quick-error").textContent = actionError || s.error;
+  statusText("quick-error", actionError || s.error);
   $("quick-error").hidden = !$("quick-error").textContent;
   $("quick-retry").hidden = !s.requested || !!s.pauseReason || !(s.error || s.captureRequiresStart || s.recovering);
   $("quick-retry").disabled = busy;
