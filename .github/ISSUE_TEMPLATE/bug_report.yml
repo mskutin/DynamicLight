@@ -19,7 +19,7 @@ body:
     id: platform
     attributes:
       label: OS and app version
-      placeholder: Windows 11 / DynamicLight 0.1.0
+      placeholder: Windows 11 / DynamicLight 0.2.0
     validations:
       required: true
   - type: input
