@@ -61,6 +61,8 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     // Read the real Windows registration result without changing the user's login settings.
     await delay(300);
     assert.equal((await control({ type: "snapshot" })).lifecycleWarning, "");
+    for (let i = 0; i < 30 && !(await control({ type: "snapshot" })).lifecycleReady; i++) await delay(100);
+    assert.equal((await control({ type: "snapshot" })).lifecycleReady, true, "Native initial display/session state arrived");
     assert.equal((await control({ type: "snapshot" })).capturing, false);
     assert.equal((await control({ type: "snapshot" })).status.connected, false);
     await assert.rejects(

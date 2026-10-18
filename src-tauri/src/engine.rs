@@ -48,6 +48,7 @@ pub struct Snapshot {
     pub recovering: bool,
     pub capture_requires_start: bool,
     pub lifecycle_warning: String,
+    pub lifecycle_ready: bool,
     pub capturing: bool,
     pub colors: Vec<Rgb>,
     pub fps: u32,
@@ -125,6 +126,7 @@ impl Engine {
                 recovering: false,
                 capture_requires_start: false,
                 lifecycle_warning: String::new(),
+                lifecycle_ready: false,
                 capturing: false,
                 colors: vec![],
                 fps: 0,
@@ -219,7 +221,10 @@ impl Engine {
     pub fn system_event(&mut self, event: SystemEvent) {
         let was_paused = !self.life.pause_reason(&self.state.settings).is_empty();
         match event {
-            SystemEvent::Ready => self.life.initializing = false,
+            SystemEvent::Ready => {
+                self.life.initializing = false;
+                self.state.lifecycle_ready = true;
+            }
             SystemEvent::Sleep(sleeping) => {
                 if sleeping == self.life.sleeping {
                     return;

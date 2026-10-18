@@ -142,7 +142,11 @@ fn show(app: &tauri::AppHandle) {
 }
 pub fn run() {
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if !args.iter().any(|arg| arg == "--autostart") {
+                show(app);
+            }
+        }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
@@ -156,6 +160,7 @@ pub fn run() {
             launch_at_login
         ])
         .setup(|app| {
+            let background = std::env::args().any(|arg| arg == "--autostart");
             #[cfg(target_os = "windows")]
             platform::set_taskbar_icon(
                 &app.get_webview_window("main")
@@ -190,7 +195,7 @@ pub fn run() {
                 settings::Settings::default()
             };
             let emitter = app.handle().clone();
-            let preview = Arc::new(AtomicBool::new(true));
+            let preview = Arc::new(AtomicBool::new(!background));
             app.manage(Preview(preview.clone()));
             let handle = engine::start(settings, path, warning, move |snapshot| {
                 // Never synchronously query the GUI thread from the lighting
@@ -229,7 +234,6 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
-            let background = std::env::args().any(|arg| arg == "--autostart");
             if let Some(window) = app.get_webview_window("main") {
                 if !background {
                     window.show()?;

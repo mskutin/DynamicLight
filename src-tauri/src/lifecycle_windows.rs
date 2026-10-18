@@ -8,7 +8,9 @@ use windows::{
     },
 };
 
-const DISPLAY_STATE: GUID = GUID::from_u128(0x6fe69556_704a_47a0_8f24_c28d936fda47);
+// Interactive applications must use the session display state, not the kernel/console GUID.
+// https://learn.microsoft.com/en-us/windows/win32/power/power-setting-guids
+const DISPLAY_STATE: GUID = GUID::from_u128(0x2b84c20e_ad23_4ddf_93db_05ffbd7efca5);
 
 pub fn watch(handle: Handle) -> Result<(), String> {
     std::thread::Builder::new()
