@@ -13,7 +13,7 @@ pub struct Samples {
     pub received: u64,
 }
 impl Samples {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             data: VecDeque::with_capacity(SIZE),
             updated: Instant::now(),
@@ -43,10 +43,21 @@ enum Source {
     Cpal(#[allow(dead_code)] cpal::Stream),
     #[cfg(target_os = "macos")]
     Mac(#[allow(dead_code)] super::platform::MacAudio),
+    #[cfg(target_os = "linux")]
+    Linux(#[allow(dead_code)] super::linux::SystemAudio),
 }
 impl Audio {
     pub fn start(system: bool) -> Result<Self, String> {
         let feed = Arc::new(Mutex::new(Samples::new()));
+        #[cfg(target_os = "linux")]
+        if system {
+            return Ok(Self {
+                _stream: Source::Linux(super::linux::SystemAudio::start(feed.clone())?),
+                feed,
+                fft: FftPlanner::new().plan_fft_forward(SIZE),
+                rate: 48000.0,
+            });
+        }
         #[cfg(target_os = "macos")]
         if system {
             let source = super::platform::MacAudio::start(feed.clone())?;

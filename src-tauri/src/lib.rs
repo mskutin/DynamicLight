@@ -5,6 +5,8 @@ mod capture_windows;
 mod device;
 mod engine;
 mod lighting;
+#[cfg(target_os = "linux")]
+mod linux;
 mod platform;
 mod protocol;
 mod settings;
@@ -20,6 +22,11 @@ use tauri::{
     Emitter, Manager,
 };
 struct Preview(Arc<AtomicBool>);
+
+#[tauri::command]
+fn platform_name() -> &'static str {
+    std::env::consts::OS
+}
 
 #[tauri::command]
 async fn control(action: Action, state: tauri::State<'_, Handle>) -> Result<Snapshot, String> {
@@ -48,8 +55,19 @@ fn show(app: &tauri::AppHandle) {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
-        .invoke_handler(tauri::generate_handler![control, displays, quit])
+        .invoke_handler(tauri::generate_handler![
+            control,
+            displays,
+            quit,
+            platform_name
+        ])
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            platform::set_taskbar_icon(
+                &app.get_webview_window("main")
+                    .ok_or("Missing main window")?,
+            )
+            .map_err(std::io::Error::other)?;
             let path = app.path().app_data_dir()?.join("settings.json");
             let legacy = app
                 .path()
@@ -127,6 +145,11 @@ pub fn run() {
                     preview.0.store(false, Ordering::Relaxed);
                 }
                 api.prevent_close();
+                // GNOME and some other Linux desktops have no tray host.
+                // Keep a taskbar entry so the window is always recoverable.
+                #[cfg(target_os = "linux")]
+                let _ = window.minimize();
+                #[cfg(not(target_os = "linux"))]
                 let _ = window.hide();
             }
         })

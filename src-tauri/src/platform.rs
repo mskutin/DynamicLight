@@ -1,5 +1,48 @@
 use crate::engine::Handle;
 
+#[cfg(target_os = "windows")]
+pub fn set_taskbar_icon(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use windows::{
+        core::PCWSTR,
+        Win32::{
+            Foundation::{HINSTANCE, HWND, LPARAM, WPARAM},
+            System::LibraryLoader::GetModuleHandleW,
+            UI::WindowsAndMessaging::{
+                LoadImageW, SendMessageW, ICON_BIG, IMAGE_ICON, LR_DEFAULTSIZE, LR_SHARED,
+                WM_GETICON, WM_SETICON,
+            },
+        },
+    };
+    let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
+    // Tauri's window icon sets ICON_SMALL only. Windows uses ICON_BIG for
+    // the taskbar and Alt+Tab. Resource 32512 is emitted by tauri-build.
+    // LR_SHARED keeps the embedded icon valid until the process exits.
+    unsafe {
+        let module = GetModuleHandleW(None).map_err(|e| e.to_string())?;
+        let icon = LoadImageW(
+            Some(HINSTANCE(module.0)),
+            PCWSTR(32512_usize as *const u16),
+            IMAGE_ICON,
+            0,
+            0,
+            LR_SHARED | LR_DEFAULTSIZE,
+        )
+        .map_err(|e| format!("Could not load taskbar icon: {e}"))?;
+        SendMessageW(
+            hwnd,
+            WM_SETICON,
+            Some(WPARAM(ICON_BIG as usize)),
+            Some(LPARAM(icon.0 as isize)),
+        );
+        if SendMessageW(hwnd, WM_GETICON, Some(WPARAM(ICON_BIG as usize)), None).0
+            != icon.0 as isize
+        {
+            return Err("Windows did not retain the taskbar icon".into());
+        }
+    }
+    Ok(())
+}
+
 pub struct FrameClock {
     active: bool,
 }
@@ -174,9 +217,11 @@ mod mac {
         }
     }
 }
+#[cfg(target_os = "linux")]
+pub use crate::linux::watch_power;
 #[cfg(target_os = "macos")]
 pub use mac::*;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 pub fn watch_power(_: Handle) -> Result<(), String> {
-    Err("Sleep notifications are supported on Windows and macOS".into())
+    Err("This operating system is not supported".into())
 }

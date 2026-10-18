@@ -68,7 +68,12 @@ impl Controller {
                         )
                 })
                 .ok_or("No compatible strip found. Check USB and close SyncLight.")?;
-            self.device = Some(target.open_device(&api).map_err(|e| e.to_string())?);
+            self.device = Some(target.open_device(&api).map_err(|e| {
+                #[cfg(target_os = "linux")]
+                { format!("Cannot open the strip: {e}. Install the DynamicLight USB permission rule, then unplug and reconnect the strip. See docs/linux.md.") }
+                #[cfg(not(target_os = "linux"))]
+                { e.to_string() }
+            })?);
             let id = self.id();
             self.write(&protocol::command(id, 0x82, &[]))?;
             thread::sleep(Duration::from_millis(50));

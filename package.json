@@ -1,6 +1,6 @@
 {
   "name": "dynamiclight",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "license": "MIT",
   "author": "mskutin",
@@ -13,6 +13,7 @@
     "check": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "build:win": "tauri build --bundles nsis",
     "build:mac": "tauri build --bundles dmg",
+    "build:linux": "tauri build --bundles deb,appimage",
     "smoke": "node scripts/smoke.cjs"
   },
   "devDependencies": { "@tauri-apps/cli": "2.12.3" }

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const { invoke } = window.__TAURI__.core;
-let settings, runtime, saveTimer, busy = false, queue = Promise.resolve();
+let settings, runtime, saveTimer, busy = false, queue = Promise.resolve(), platform = '';
 const labels = { solid: 'Solid color', screen: 'Screen sync', music: 'Music', rainbow: 'Color flow' };
 const captions = { solid: 'A steady glow, exactly how you like it.', screen: 'Your screen, extended into your space.', music: 'A little rhythm for your room.', rainbow: 'Let the colors take their time.' };
 function notice(message, error = false) {
@@ -24,10 +24,12 @@ function renderRuntime(value) {
   $('connection-message').textContent = value.status.message;
   $('power').classList.toggle('off', !value.powered);
   $('power').setAttribute('aria-pressed', value.powered);
-  $('power').querySelector('span').textContent = value.powered ? 'Lights on' : 'Lights off';
-  $('capture').textContent = value.capturing ? 'Stop capture' : 'Start capture';
-  $('capture').disabled = busy || !value.powered;
-  $('frame-rate').textContent = !connected ? 'Preview only · Disconnected' : value.capturing || settings.mode === 'rainbow' ? `${value.fps} FPS · USB` : 'USB · Connected';
+  const waiting = ['screen', 'music'].includes(settings.mode) && !value.capturing;
+  $('power').querySelector('span').textContent = !value.powered ? 'Turn lights on' : !connected || waiting ? 'Power enabled' : 'Turn lights off';
+  $('power').setAttribute('aria-label', value.powered ? 'Turn lights off' : 'Turn lights on');
+  $('capture').textContent = value.capturing ? 'Stop capture' : connected ? 'Start capture' : 'Connect & start capture';
+  $('capture').disabled = busy;
+  $('frame-rate').textContent = !connected ? 'Disconnected · Preview only' : !value.powered ? 'Lights off' : waiting ? 'Capture stopped · Strip dark' : settings.brightness === 0 ? 'Brightness is zero · Strip dark' : value.capturing || settings.mode === 'rainbow' ? `${value.fps} FPS · USB` : 'Solid color · USB';
   if (value.error) notice(value.error, true);
   draw(value.colors);
 }
@@ -49,8 +51,8 @@ function updateUI() {
   $('music-controls').hidden = settings.mode !== 'music';
   $('screen').disabled = settings.mode !== 'screen'; $('refresh-screens').disabled = busy || settings.mode !== 'screen';
   $('capture-help').textContent = settings.mode === 'screen'
-    ? 'Capture stays on this computer. The preview shows sampled edge colors. On macOS, allow Screen Recording in Privacy settings.'
-    : 'Audio is analyzed locally. Microphone access needs permission. On macOS, computer audio also needs Screen & System Audio Recording permission.';
+    ? 'Capture stays on this computer. ' + (platform === 'linux' ? 'Screen sync needs an X11 session; Wayland support is planned.' : platform === 'macos' ? 'Allow Screen Recording in Privacy settings.' : 'The preview shows sampled edge colors.')
+    : 'Audio is analyzed locally. ' + (platform === 'linux' ? 'Computer audio uses PulseAudio or PipeWire. Microphone uses your default input.' : platform === 'macos' ? 'Allow Screen & System Audio Recording for computer audio, or Microphone access for your mic.' : 'Computer audio follows your speakers. Microphone mode listens to your room.');
   if (runtime) renderRuntime(runtime);
 }
 function save() { clearTimeout(saveTimer); return request({ type: 'settings', settings: { ...settings } }); }
@@ -91,11 +93,13 @@ function draw(colors) {
   gradient.addColorStop(0, `rgba(${color.join(',')},0.22)`); gradient.addColorStop(1, '#15131d');
   preview.fillStyle = gradient; preview.fillRect(289, 48, 422, 184);
   preview.fillStyle = '#c9bbdf'; preview.font = '18px Segoe UI'; preview.textAlign = 'center';
-  preview.fillText(settings.mode === 'music' ? '♫' : settings.mode === 'screen' && runtime.capturing ? 'LIVE EDGE COLORS' : 'DYNAMIC / LIGHT', 500, 145);
+  preview.fillText(!runtime.powered ? 'LIGHTS OFF' : ['screen', 'music'].includes(settings.mode) && !runtime.capturing ? 'START CAPTURE TO LIGHT YOUR STRIP' : settings.mode === 'music' ? '♫' : settings.mode === 'screen' ? 'LIVE EDGE COLORS' : 'DYNAMIC / LIGHT', 500, 145);
   preview.fillStyle = '#3b3543'; preview.fillRect(489, 242, 22, 25);
   preview.beginPath(); preview.roundRect(451, 267, 98, 5, 3); preview.fill();
 }
 async function init() {
+  platform = await invoke('platform_name');
+  if (platform === 'linux') $('close-behavior').textContent = 'Closing the window minimizes it and keeps lighting running. Use Quit DynamicLight to exit.';
   await window.__TAURI__.event.listen('lighting', event => renderRuntime(event.payload));
   const initial = await request({ type: 'snapshot' }); settings = initial.settings; updateUI();
   $('connect').onclick = () => run(async () => { await save(); await request({ type: runtime.status.connected ? 'disconnect' : 'connect' }); });
@@ -116,7 +120,13 @@ async function init() {
     if (screens.some(screen => screen.id === settings.screenId)) $('screen').value = settings.screenId;
     else { settings.screenId = screens[0]?.id || ''; await save(); }
   });
-  $('capture').onclick = () => run(async () => { await save(); await request({ type: runtime.capturing ? 'stopCapture' : 'startCapture' }); });
+  $('capture').onclick = () => run(async () => {
+    await save();
+    if (runtime.capturing) { await request({ type: 'stopCapture' }); return; }
+    if (!runtime.status.connected) await request({ type: 'connect' });
+    if (!runtime.powered) await request({ type: 'power', on: true });
+    await request({ type: 'startCapture' });
+  });
   $('quit').onclick = () => run(async () => { await save(); await invoke('quit'); });
   window.addEventListener('focus', () => request({ type: 'snapshot' }).catch(error => notice(String(error), true)));
 }

@@ -7,6 +7,7 @@ pub struct Screen {
     pub name: String,
 }
 pub fn screens() -> Result<Vec<Screen>, String> {
+    check_session()?;
     Monitor::all()
         .map_err(|e| e.to_string())?
         .iter()
@@ -33,6 +34,7 @@ pub struct ScreenCapture {
 }
 impl ScreenCapture {
     pub fn start(id: &str) -> Result<Self, String> {
+        check_session()?;
         let all = Monitor::all().map_err(|e| e.to_string())?;
         let monitor = if id.is_empty() {
             all.iter()
@@ -110,5 +112,29 @@ impl ScreenCapture {
                 settings,
             ))
         }
+    }
+}
+
+fn check_session() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if crate::linux::wayland() {
+        // xcap's still-image Wayland fallback may write screenshots to disk or
+        // ask repeatedly. Do not use it for continuous private screen sampling.
+        return Err("Screen sync currently needs an X11 session. Log in with Xorg/X11, or use Solid color, Music, or Color flow on Wayland.".into());
+    }
+    Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    #[test]
+    #[ignore = "requires an X11 display; CI supplies Xvfb"]
+    fn x11_capture_samples_display() {
+        let mut capture = ScreenCapture::start("").unwrap();
+        let settings = Settings::default();
+        let colors = capture.colors(&settings).unwrap();
+        assert_eq!(colors.len(), settings.count);
+        assert!(capture.dimensions.0 > 0 && capture.dimensions.1 > 0);
     }
 }

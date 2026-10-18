@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DynamicLight",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "com.dynamiclight.desktop",
   "build": { "frontendDist": "../src/ui" },
   "app": {
@@ -13,7 +13,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "dmg"],
+    "targets": "all",
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "copyright": "Copyright 2026 mskutin",
     "licenseFile": "../LICENSE",
@@ -21,6 +21,15 @@
     "category": "Utility",
     "shortDescription": "USB monitor backlight controller",
     "windows": { "nsis": { "installMode": "currentUser" } },
+    "linux": {
+      "deb": {
+        "depends": ["libasound2", "libudev1", "libpipewire-0.3-0", "libxcb1", "libxcb-randr0", "pulseaudio-utils"],
+        "recommends": ["libasound2-plugins"],
+        "files": {"/usr/lib/udev/rules.d/69-dynamiclight.rules": "linux/69-dynamiclight.rules"},
+        "postInstallScript": "linux/postinst",
+        "postRemoveScript": "linux/postrm"
+      }
+    },
     "macOS": { "minimumSystemVersion": "13.0", "infoPlist": "Info.plist" }
   }
 }

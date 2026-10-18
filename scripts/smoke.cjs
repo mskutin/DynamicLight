@@ -39,10 +39,20 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       await page.waitForFunction(() => !busy);
       await page.locator('[data-mode="screen"]').click();
       await page.waitForFunction(() => !busy);
+      assert.match(await page.locator('#frame-rate').innerText(), /Capture stopped/);
+      assert.equal(await page.locator('#power span').innerText(), 'Power enabled');
       await page.locator('#refresh-screens').click();
       await page.waitForFunction(() => !busy);
+      // Starting capture must recover from both disconnected and power-off,
+      // without requiring separate controls in another part of the window.
+      await page.locator('#connect').click();
+      await page.waitForFunction(() => !runtime.status.connected && !busy);
+      await page.locator('#power').click();
+      await page.waitForFunction(() => !runtime.powered && !busy);
+      assert.equal(await page.locator('#capture').isEnabled(), true);
       await page.locator('#capture').click();
       await page.waitForFunction(() => runtime.capturing && runtime.captureSize[0] > 0, { timeout: 15000 });
+      assert.equal((await control({ type: 'snapshot' })).powered, true);
       // Exclude display enumeration / capture startup from the FPS window.
       await delay(3000);
       let state = await control({ type: 'snapshot' });
