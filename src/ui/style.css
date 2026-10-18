@@ -773,3 +773,19 @@ footer {
   width: 90%;
   margin: 0 auto;
 }
+/* In compact windows keep controls ahead of the large output canvas. */
+@media (max-width: 760px) {
+  .stage-column,
+  .controls-column {
+    display: contents;
+  }
+  .tuning {
+    order: 1;
+  }
+  .preview-card {
+    order: 2;
+  }
+  .telemetry {
+    order: 3;
+  }
+}

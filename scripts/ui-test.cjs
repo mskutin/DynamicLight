@@ -254,6 +254,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         ),
         `No horizontal overflow at ${width}px`,
       );
+      if (width <= 760) {
+        const controls = await page.locator(".tuning").boundingBox();
+        const preview = await page.locator(".preview-card").boundingBox();
+        assert(
+          controls.y < preview.y,
+          "Compact layout puts controls before output preview",
+        );
+      }
       if (width === 540)
         await page.screenshot({
           path: ".local/ui-compact.png",
