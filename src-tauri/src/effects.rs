@@ -13,7 +13,8 @@ pub fn palette(s: &Settings, position: f32) -> Rgb {
         _ => [[80, 245, 180], [70, 110, 255], [210, 65, 245]],
     };
     let p = position.rem_euclid(1.0) * 3.0;
-    let i = p.floor() as usize;
+    // Floating-point rem_euclid can round a tiny negative phase up to 1.0.
+    let i = p.floor() as usize % 3;
     std::array::from_fn(|c| {
         (stops[i][c] as f32 * (1.0 - p.fract()) + stops[(i + 1) % 3][c] as f32 * p.fract()).round()
             as u8
@@ -87,6 +88,18 @@ pub fn envelope(previous: &mut Vec<f32>, incoming: &[f32], dt: f32, release: u8)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn palettes_wrap_negative_and_boundary_phases() {
+        for name in ["aurora", "ocean", "sunset", "mono"] {
+            let s = Settings {
+                palette: name.into(),
+                ..Settings::default()
+            };
+            assert_eq!(palette(&s, 0.0), palette(&s, 1.0));
+            assert_eq!(palette(&s, 0.25), palette(&s, -0.75));
+            assert_eq!(palette(&s, 0.0), palette(&s, -f32::EPSILON / 8.0));
+        }
+    }
     #[test]
     fn effects_move_and_support_every_strip_size() {
         for effect in ["rainbow", "aurora", "breath", "comet", "ember"] {

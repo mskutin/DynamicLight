@@ -4,10 +4,16 @@
 
 1. Close SyncLight or any other lighting controller.
 2. Check that your strip is connected and brightness is above zero.
-3. Try **Solid color**, then **Connect strip** and **Turn lights on**.
-4. For **Screen sync** or **Music**, click **Start capture**. Capture stops when you turn power off, change mode/source, disconnect, or put the computer to sleep.
+3. Try **Color**, then **Connect strip** and **Turn lights on**.
+4. For **Screen** or **Music**, click **Start capture**. Capture stops when you turn power off, change mode/source, disconnect, or put the computer to sleep.
 
 Screen sync can be dark when the screen edges are black. Music mode is dark during silence. Protected video may not be capturable. HDR color correction is not yet implemented.
+
+## Music is too quiet or reacts slowly
+
+Check **Audio input** in Live activity. If no input arrives, play audio on your default speakers or select Microphone and check its permissions. Lower **Noise gate** if quiet passages disappear; raise **Sensitivity** for a stronger response. Lower **Release** and **Color smoothing** for sharper changes. Bass Pulse only responds to low frequencies—try Spectrum for a wider range of sounds.
+
+The frequency bars show analyzed audio, even while the strip is disconnected. The LED preview shows outgoing colors; successful USB writes cannot confirm that the physical LEDs are lit.
 
 ## macOS permissions
 

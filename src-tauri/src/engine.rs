@@ -361,6 +361,9 @@ impl Engine {
                 }
             };
             if let Some(Ok(())) = result {
+                if self.state.error.starts_with("USB write failed:") {
+                    self.state.error.clear();
+                }
                 self.fps_frames += 1;
                 self.state.frames_written += 1;
                 self.last_write = Some(Instant::now());
