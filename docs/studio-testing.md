@@ -6,6 +6,8 @@ Record results and defects in [Windows/Linux validation #45](https://github.com/
 
 After the settings refactor, also check interleaved Studio/tray/Quick-controls edits: changing color in Studio must preserve a newer Quick-controls brightness change, and idle saves must not undo the latest edit to the same field. Load existing profiles, update their display selection, restart, and confirm scene settings and local bindings survive while calibration, comfort limits and capture-resume preferences remain local.
 
+For scene sharing and color tools, export a selection on one platform and import it on another. Check copy/replace/skip conflicts, the pre-import backup, capacity errors and an intervening library edit. Verify imports never start capture or USB. Exercise color-wheel pointer controls, keyboard sliders, RGB/hex, Apply/Reset/Cancel, approximate temperature, palette color order/replacement/deletion, recent colors and persistence. Compare palette output on physical strips; the temperature control is not measured white calibration. In Quick controls, verify event-driven favorites/pin initialization and recovery from a transient failed brightness preview.
+
 ## Automated coverage
 
 - Rust: profile persistence/validation, calibration apply/cancel/Stop and lock transitions using an isolated USB transport, symmetric black-bar detection with hysteresis, color adjustments, hard brightness cap, startup rate limiting, spectral-flux onsets, sustained tones/silence/refractory period, and blend behavior.
