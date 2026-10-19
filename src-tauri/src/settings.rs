@@ -44,6 +44,8 @@ pub struct Settings {
     pub effect_reverse: bool,
     #[serde(default)]
     pub studio: crate::studio::Studio,
+    #[serde(default)]
+    pub replay: crate::sequence::Playback,
     pub mode_settings: std::collections::BTreeMap<String, ModeSettings>,
 }
 impl Default for Settings {
@@ -86,6 +88,7 @@ impl Default for Settings {
             minimum_glow: 0,
             effect_reverse: false,
             studio: Default::default(),
+            replay: Default::default(),
             mode_settings: Default::default(),
         }
     }
@@ -94,7 +97,8 @@ impl Settings {
     pub fn validate(&self) -> Result<(), String> {
         self.capture_source.validate()?;
         self.studio.validate()?;
-        if self.mode_settings.len() > 5 {
+        self.replay.validate()?;
+        if self.mode_settings.len() > 6 {
             return Err("Too many remembered modes".into());
         }
         for (mode, memory) in &self.mode_settings {
@@ -142,7 +146,7 @@ impl Settings {
         {
             return Err("Settings outside supported range".into());
         }
-        if !["solid", "screen", "music", "rainbow", "blend"].contains(&self.mode.as_str())
+        if !["solid", "screen", "music", "rainbow", "blend", "replay"].contains(&self.mode.as_str())
             || !["system", "microphone"].contains(&self.audio_source.as_str())
         {
             return Err("Unknown lighting mode or audio source".into());
@@ -254,6 +258,8 @@ pub struct ModeSettings {
     effect_reverse: bool,
     #[serde(default)]
     studio: crate::studio::Studio,
+    #[serde(default)]
+    replay: crate::sequence::Playback,
 }
 impl ModeSettings {
     pub fn capture(s: &Settings) -> Self {
@@ -281,6 +287,7 @@ impl ModeSettings {
             blend: s.blend,
             effect_reverse: s.effect_reverse,
             studio: s.studio.clone(),
+            replay: s.replay.clone(),
         }
     }
     pub fn apply(&self, s: &mut Settings) {
@@ -307,6 +314,7 @@ impl ModeSettings {
         s.blend = self.blend;
         s.effect_reverse = self.effect_reverse;
         s.studio = self.studio.clone();
+        s.replay = self.replay.clone();
     }
 }
 
@@ -339,6 +347,8 @@ pub struct SceneSettings {
     pub effect_reverse: bool,
     #[serde(default)]
     pub studio: crate::studio::Studio,
+    #[serde(default)]
+    pub replay: crate::sequence::Playback,
 }
 impl SceneSettings {
     pub fn capture(s: &Settings) -> Self {
@@ -365,6 +375,7 @@ impl SceneSettings {
             blend: s.blend,
             effect_reverse: s.effect_reverse,
             studio: s.studio.clone(),
+            replay: s.replay.clone(),
         }
     }
     pub fn apply(&self, current: &Settings) -> Settings {
@@ -391,6 +402,7 @@ impl SceneSettings {
             blend: self.blend,
             effect_reverse: self.effect_reverse,
             studio: self.studio.clone(),
+            replay: self.replay.clone(),
             ..current.clone()
         }
     }

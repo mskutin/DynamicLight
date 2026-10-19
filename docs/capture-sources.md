@@ -6,7 +6,7 @@ Window selection lists available applications and titles locally. Choose **Refre
 
 Window IDs are bound to their process and the current DynamicLight session. Re-select a window after restarting DynamicLight. This prevents a saved window ID being silently reused for another application. Local profiles retain source bindings; exported scenes exclude window identities, titles, and region/display bindings.
 
-Rectangle coordinates are normalized to the selected display and rounded out to physical pixel boundaries. The rectangle therefore retains its relative coverage at different scale factors. Display resolution/rearrangement still uses the existing source-change recovery policy. A window's actual captured image dimensions determine its LED edge mapping.
+Rectangle coordinates are normalized to the selected display and rounded out to physical pixel boundaries. The rectangle therefore retains its relative coverage at different scale factors. Display resolution/rearrangement still uses the existing source-change recovery policy. The selected physical display determines LED edge allocation; a window or rectangle changes sampling coordinates without reassigning LEDs to different physical edges.
 
 ## Platform behavior
 

@@ -570,6 +570,9 @@
                 >Save scene
               </button>
             </div>
+            <button id="sequence-open" type="button">
+              Record / replay RGB sequence…
+            </button>
             <div class="scene-toolbar">
               <label for="scene-search"
                 >Find a scene<input
@@ -1550,6 +1553,97 @@
       <p id="source-status" class="help" role="status"></p>
       <button id="source-apply" class="power">Apply source</button>
     </dialog>
+    <dialog id="sequence-dialog" aria-labelledby="sequence-title">
+      <div class="dialog-heading">
+        <h2 id="sequence-title">RGB sequences</h2>
+        <button id="sequence-close">Close</button>
+      </div>
+      <p class="help">
+        Record generated LED colors only, never screenshots or audio. Up to 60
+        seconds / 1800 frames. Recording does not start lights or capture.
+        Export to keep a file before replacing the current sequence.
+      </p>
+      <fieldset>
+        <legend>Record current lighting</legend>
+        <label
+          >Maximum duration (seconds)<input
+            id="sequence-seconds"
+            type="number"
+            min="1"
+            max="60"
+            value="15"
+        /></label>
+        <div class="input-row">
+          <button id="sequence-record">Start recording</button
+          ><button id="sequence-stop-record">Finish recording</button>
+        </div>
+        <p id="sequence-record-state" class="help" role="status"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Offline playback</legend>
+        <p id="sequence-clip" class="help"></p>
+        <label
+          >Import RGB sequence<input
+            id="sequence-file"
+            type="file"
+            accept=".json,application/json" /></label
+        ><button id="sequence-export">Export to Downloads</button>
+        <div class="settings-grid">
+          <label
+            >Trim start (seconds)<input
+              id="sequence-start"
+              type="number"
+              min="0"
+              max="59.999"
+              step="0.001"
+              value="0" /></label
+          ><label
+            >Trim end (seconds)<input
+              id="sequence-end"
+              type="number"
+              min="0.001"
+              max="60"
+              step="0.001"
+              value="1" /></label
+          ><label
+            >Speed %<input
+              id="sequence-speed"
+              type="number"
+              min="25"
+              max="400"
+              value="100" /></label
+          ><label
+            >Replay level %<input
+              id="sequence-level"
+              type="number"
+              min="0"
+              max="100"
+              value="100"
+          /></label>
+        </div>
+        <label class="checkbox"
+          ><input id="sequence-loop" type="checkbox" checked /> Loop trimmed
+          range</label
+        >
+        <p id="sequence-mapping" class="help"></p>
+        <label class="checkbox"
+          ><input id="sequence-remap" type="checkbox" /> Proportionally remap to
+          the current LED count and coverage</label
+        >
+        <p class="help">
+          Non-looping playback holds its final frame. Recorded intensity can be
+          dimmed; global comfort limits still apply. Decorative zones are
+          ignored during replay. Playback settings can be saved as a scene;
+          another computer also needs the matching RGB file.
+        </p>
+        <div class="input-row">
+          <button id="sequence-play" class="power">Play / restart</button
+          ><button id="sequence-stop">Stop lighting</button>
+        </div>
+      </fieldset>
+      <p id="sequence-status" class="help" role="status"></p>
+    </dialog>
+    <script src="sequences.js"></script>
     <script src="capture-sources.js"></script>
     <script src="image-palette.js"></script>
     <script src="studio.js"></script>

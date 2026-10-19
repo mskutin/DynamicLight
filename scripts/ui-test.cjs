@@ -19,6 +19,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         "studio.js",
         "image-palette.js",
         "capture-sources.js",
+        "sequences.js",
         "library-tools.js",
         "ui-common.js",
         "icons.svg",
@@ -195,6 +196,22 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         },
         core: {
           invoke: async (cmd, args) => {
+            if (cmd === "import_sequence") {
+              const clip = JSON.parse(args.text);
+              state.sequence = {
+                recording: false,
+                clip: {
+                  id: clip.id,
+                  count: clip.count,
+                  sides: clip.sides,
+                  durationMs: clip.durationMs,
+                  frames: clip.frames.length,
+                },
+              };
+              return structuredClone(state);
+            }
+            if (cmd === "export_sequence")
+              return "Downloads/DynamicLight-rgb-test.json";
             if (cmd === "capture_windows_list")
               return [
                 {
@@ -475,6 +492,31 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
             if (cmd !== "control") return;
             const a = args.action;
             calls.push(structuredClone(a));
+            if (a.type === "recordStart")
+              state.sequence = {
+                ...state.sequence,
+                recording: true,
+                elapsedMs: 0,
+                recordedFrames: 0,
+              };
+            if (a.type === "recordStop")
+              state.sequence = {
+                recording: false,
+                clip: {
+                  id: "recorded",
+                  count: state.settings.count,
+                  sides: state.settings.sides,
+                  durationMs: 1000,
+                  frames: 30,
+                },
+              };
+            if (
+              a.type === "patchSettings" &&
+              a.patch.mode === "replay" &&
+              !a.patch.replay.remap &&
+              state.sequence.clip.count !== state.settings.count
+            )
+              throw Error("Explicit remapping required");
             await new Promise((resolve) => setTimeout(resolve, 35));
             if (a.type === "calibrationStep" && !state.calibrating)
               throw new Error("Start calibration first");
@@ -1533,6 +1575,64 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     }
     await page.screenshot({ path: ".local/ui-updates.png" });
 
+    await page.locator('[data-view="scenes"]').first().click();
+    await page.locator("#sequence-open").click();
+    await page.locator("#sequence-record").click();
+    await page.waitForFunction(() => fixture.state.sequence?.recording);
+    await page.locator("#sequence-stop-record").click();
+    await page.waitForFunction(
+      () => fixture.state.sequence?.clip?.id === "recorded",
+    );
+    await page.waitForFunction(()=>!document.querySelector("#sequence-file").disabled);
+    await page.locator("#sequence-file").setInputFiles({
+      name: "fixture-rgb.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify({
+          format: "dynamiclight-rgb",
+          version: 1,
+          id: "imported",
+          count: 2,
+          sides: 3,
+          durationMs: 1000,
+          frames: [
+            {
+              ms: 0,
+              colors: [
+                [255, 0, 0],
+                [0, 0, 255],
+              ],
+            },
+          ],
+        }),
+      ),
+    });
+    await page.waitForFunction(
+      () => fixture.state.sequence?.clip?.id === "imported",
+    );
+    await page.locator("#sequence-play").click();
+    await page.waitForFunction(()=>/remapping/.test(document.querySelector("#sequence-status").textContent));
+    await page.locator("#sequence-remap").check();
+    await page.locator("#sequence-speed").fill("200");
+    await page.locator("#sequence-start").fill("0.2");
+    await page.locator("#sequence-play").click();
+    await page.waitForFunction(() => /Offline replay started/.test(document.querySelector("#sequence-status").textContent));
+    assert.equal(
+      await page.evaluate(() => fixture.state.settings.replay.startMs),
+      200,
+    );
+    assert.equal(
+      await page.evaluate(() => fixture.state.settings.replay.speed),
+      200,
+    );
+    assert.equal(
+      await page.evaluate(() => fixture.state.capturing),
+      false,
+      "Offline playback has no capture",
+    );
+    await page.locator("#sequence-stop").click();
+    await page.waitForFunction(() => !fixture.state.requested);
+    await page.locator("#sequence-close").click();
     // Capture source changes remain a deliberate, local selection.
     await page.locator('[data-view="control"]').click();
     await page.locator('[data-mode="screen"]').click();

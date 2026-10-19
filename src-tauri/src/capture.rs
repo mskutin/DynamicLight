@@ -31,7 +31,11 @@ pub fn source_signature(settings: &Settings) -> Result<String, String> {
         crate::capture_source::Source::Window { .. }
     ) {
         settings.capture_source.window()?;
-        return serde_json::to_string(&settings.capture_source).map_err(|e| e.to_string());
+        return Ok(format!(
+            "{}:{}",
+            serde_json::to_string(&settings.capture_source).map_err(|e| e.to_string())?,
+            display_aspect(&settings.screen_id)?
+        ));
     }
     let id = settings.screen_id.as_str();
     check_session()?;
@@ -59,6 +63,7 @@ enum Capture {
     Window {
         window: xcap::Window,
         pid: u32,
+        aspect: f32,
         #[cfg(not(target_os = "windows"))]
         crop: lighting::Crop,
         #[cfg(target_os = "windows")]
@@ -85,6 +90,7 @@ impl ScreenCapture {
                 dimensions,
                 inner: Capture::Window {
                     pid: window.pid().map_err(|e| e.to_string())?,
+                    aspect: display_aspect(&settings.screen_id)?,
                     window: window.clone(),
                     #[cfg(not(target_os = "windows"))]
                     crop: lighting::Crop::default(),
@@ -112,6 +118,7 @@ impl ScreenCapture {
             Capture::Window {
                 window,
                 pid,
+                aspect,
                 #[cfg(not(target_os = "windows"))]
                 crop,
                 #[cfg(target_os = "windows")]
@@ -131,20 +138,23 @@ impl ScreenCapture {
                 }
                 #[cfg(target_os = "windows")]
                 {
-                    capture.colors(settings)
+                    capture.colors(settings, *aspect)
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
                     let image = window.capture_image().map_err(|e| e.to_string())?;
                     self.dimensions = (image.width(), image.height());
-                    Ok(lighting::sample_tracked(
+                    Ok(lighting::sample_geometry(
                         image.as_raw(),
-                        image.width(),
-                        image.height(),
-                        image.width() as usize * 4,
-                        false,
+                        (
+                            image.width(),
+                            image.height(),
+                            image.width() as usize * 4,
+                            false,
+                        ),
                         settings,
                         crop,
+                        *aspect,
                     ))
                 }
             }
@@ -248,14 +258,13 @@ impl DisplayCapture {
                 dimensions.0,
                 dimensions.1,
             )?;
-            Ok(lighting::sample_tracked(
+            Ok(lighting::sample_geometry(
                 pixels,
-                w,
-                h,
-                w as usize * 4,
-                false,
+                (w, h, w as usize * 4, false),
                 settings,
                 &mut self.crop,
+                self.monitor.width().unwrap_or(16) as f32
+                    / self.monitor.height().unwrap_or(9).max(1) as f32,
             ))
         }
         #[cfg(not(target_os = "windows"))]
@@ -269,19 +278,39 @@ impl DisplayCapture {
                 .capture_region(rect.0, rect.1, rect.2, rect.3)
                 .map_err(|e| e.to_string())?;
             self.dimensions = (image.width(), image.height());
-            Ok(lighting::sample_tracked(
+            Ok(lighting::sample_geometry(
                 image.as_raw(),
-                image.width(),
-                image.height(),
-                image.width() as usize * 4,
-                false,
+                (
+                    image.width(),
+                    image.height(),
+                    image.width() as usize * 4,
+                    false,
+                ),
                 settings,
                 &mut self.crop,
+                self.monitor.width().unwrap_or(16) as f32
+                    / self.monitor.height().unwrap_or(9).max(1) as f32,
             ))
         }
     }
 }
 
+fn display_aspect(id: &str) -> Result<f32, String> {
+    let monitors = Monitor::all().map_err(|e| e.to_string())?;
+    let monitor = if id.is_empty() {
+        monitors
+            .iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .or(monitors.first())
+    } else {
+        monitors
+            .iter()
+            .find(|m| m.id().is_ok_and(|n| n.to_string() == id))
+    }
+    .ok_or("Select the physical display for this strip")?;
+    Ok(monitor.width().map_err(|e| e.to_string())? as f32
+        / monitor.height().map_err(|e| e.to_string())?.max(1) as f32)
+}
 pub(crate) fn check_session() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     if crate::linux::wayland() {

@@ -21,6 +21,7 @@ mod platform;
 mod profiles;
 mod protocol;
 mod scenes;
+mod sequence;
 mod settings;
 mod sharing;
 mod studio;
@@ -172,6 +173,8 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             appearance::appearance,
+            sequence::import_sequence,
+            sequence::export_sequence,
             studio::studio_library,
             studio::studio_preview,
             studio::wallpaper_image,

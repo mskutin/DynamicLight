@@ -1721,3 +1721,32 @@ dd {
   width: 100%;
   min-width: 0;
 }
+
+#sequence-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+#sequence-dialog fieldset {
+  margin-block: 14px;
+  min-width: 0;
+}
+#sequence-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-block: 12px;
+  min-width: 0;
+}
+#sequence-dialog label.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+#sequence-dialog input:not([type="checkbox"]) {
+  min-width: 0;
+  width: 100%;
+}
+#sequence-dialog .input-row {
+  flex-wrap: wrap;
+}
+#sequence-status {
+  overflow-wrap: anywhere;
+}

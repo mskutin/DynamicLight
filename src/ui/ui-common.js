@@ -35,6 +35,7 @@ window.LightUI = (() => {
     if (!snapshot || snapshot.calibrating) return false;
     const fields = {
       solid: ["color"],
+      replay: ["replay"],
       rainbow: [
         "effect",
         "palette",

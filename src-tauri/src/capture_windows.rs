@@ -412,11 +412,11 @@ impl WindowCapture {
         capture.session.StartCapture()?;
         Ok(capture)
     }
-    pub fn colors(&mut self, settings: &Settings) -> Result<Vec<Rgb>, String> {
-        self.read(settings)
+    pub fn colors(&mut self, settings: &Settings, aspect: f32) -> Result<Vec<Rgb>, String> {
+        self.read(settings, aspect)
             .map_err(|e| format!("Window capture ended: {e}. Select the source and Retry."))
     }
-    fn read(&mut self, settings: &Settings) -> windows::core::Result<Vec<Rgb>> {
+    fn read(&mut self, settings: &Settings, aspect: f32) -> windows::core::Result<Vec<Rgb>> {
         let hwnd = windows::Win32::Foundation::HWND(self.window as *mut c_void);
         let mut pid = 0;
         unsafe {
@@ -505,14 +505,12 @@ impl WindowCapture {
                 mapped.pData.cast::<u8>(),
                 mapped.RowPitch as usize * self.pixels.1 as usize,
             );
-            let colors = lighting::sample_tracked(
+            let colors = lighting::sample_geometry(
                 pixels,
-                self.pixels.0,
-                self.pixels.1,
-                mapped.RowPitch as usize,
-                true,
+                (self.pixels.0, self.pixels.1, mapped.RowPitch as usize, true),
                 settings,
                 &mut self.crop,
+                aspect,
             );
             self.context.Unmap(staging, 0);
             Ok(colors)
@@ -594,7 +592,7 @@ mod window_tests {
         let settings = Settings::default();
         let mut frame = vec![];
         for _ in 0..100 {
-            frame = capture.colors(&settings).unwrap();
+            frame = capture.colors(&settings, 16.0 / 9.0).unwrap();
             if frame.iter().flatten().any(|v| *v > 0) {
                 break;
             }
@@ -619,7 +617,7 @@ mod window_tests {
             .unwrap();
         }
         for _ in 0..100 {
-            capture.colors(&settings).unwrap();
+            capture.colors(&settings, 16.0 / 9.0).unwrap();
             if capture.size != before {
                 break;
             }
@@ -628,7 +626,7 @@ mod window_tests {
         assert_ne!(capture.size, before);
         drop(fixture);
         for _ in 0..100 {
-            if capture.colors(&settings).is_err() {
+            if capture.colors(&settings, 16.0 / 9.0).is_err() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(30));
