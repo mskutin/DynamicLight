@@ -11,21 +11,40 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 use tauri::Manager;
 
+// Monotonic time resists clock rollback; wall time includes OS suspend on hosts
+// whose monotonic clock stops sleeping. A backwards wall-clock jump fails closed.
+struct Age {
+    monotonic: Instant,
+    wall: SystemTime,
+}
+impl Age {
+    fn new() -> Self {
+        Self {
+            monotonic: Instant::now(),
+            wall: SystemTime::now(),
+        }
+    }
+    fn elapsed(&self) -> Duration {
+        self.monotonic
+            .elapsed()
+            .max(self.wall.elapsed().unwrap_or(Duration::MAX))
+    }
+}
 struct Client {
     id: String,
     name: String,
     hash: Vec<u8>,
     active: Arc<AtomicBool>,
-    created: Instant,
+    created: Age,
     seen: Instant,
 }
 struct Pairing {
     code: String,
-    created: Instant,
+    created: Age,
     attempts: u8,
 }
 #[derive(Default)]
@@ -41,7 +60,7 @@ impl Access {
             % 1_000_000;
         self.pairing = Some(Pairing {
             code: format!("{number:06}"),
-            created: Instant::now(),
+            created: Age::new(),
             attempts: 0,
         });
         Ok(())
@@ -73,7 +92,7 @@ impl Access {
             name: name.trim().into(),
             hash,
             active: Arc::new(AtomicBool::new(true)),
-            created: Instant::now(),
+            created: Age::new(),
             seen: Instant::now(),
         });
         self.pairing = None;
@@ -167,7 +186,7 @@ fn view(state: &Remote) -> Value {
                 .as_ref()
                 .filter(|p| p.attempts < 5 && p.created.elapsed() < Duration::from_secs(120));
             json!({"enabled":true,"interfaces":interfaces(),"endpoint":s.endpoint,"fingerprint":s.fingerprint,"controller":s.controller,
-                "pairingCode":pairing.map(|p|p.code.as_str()),"pairingSeconds":pairing.map(|p|120-p.created.elapsed().as_secs()),
+                "pairingCode":pairing.map(|p|p.code.as_str()),"pairingSeconds":pairing.map(|p|120u64.saturating_sub(p.created.elapsed().as_secs())),
                 "clients":access.clients.iter().map(|c|json!({"id":c.id,"name":c.name,"connected":c.seen.elapsed()<Duration::from_secs(15) && c.active.load(Ordering::Acquire),"lastSeenSeconds":c.seen.elapsed().as_secs()})).collect::<Vec<_>>()})
         }
     }
@@ -432,6 +451,30 @@ pub async fn remote_manage(
 mod tests {
     use super::*;
     #[test]
+    fn suspend_and_clock_changes_cannot_extend_pairing_or_client_expiry() {
+        let mut access = Access::default();
+        access.new_code().unwrap();
+        let code = access.pairing.as_ref().unwrap().code.clone();
+        access.pairing.as_mut().unwrap().created.wall =
+            SystemTime::now() - Duration::from_secs(121);
+        assert!(
+            access.pair(&code, "Phone").is_err(),
+            "wall clock includes sleep when monotonic time does not"
+        );
+        access.new_code().unwrap();
+        let code = access.pairing.as_ref().unwrap().code.clone();
+        let token = access.pair(&code, "Phone").unwrap();
+        let guard = access.authorize(&token).unwrap();
+        access.clients[0].created.wall = SystemTime::now() - Duration::from_secs(86401);
+        assert!(access.authorize(&token).is_err());
+        assert!(!guard.load(Ordering::Acquire));
+        let age = Age {
+            monotonic: Instant::now(),
+            wall: SystemTime::now() + Duration::from_secs(60),
+        };
+        assert_eq!(age.elapsed(), Duration::MAX);
+    }
+    #[test]
     fn real_tls_listener_authenticates_ip_origin_pairing_and_revocation() {
         use rustls::pki_types::pem::PemObject;
         use std::io::BufRead;
@@ -562,7 +605,8 @@ mod tests {
         let code = access.pairing.as_ref().unwrap().code.clone();
         assert!(access.pair(&code, "Phone").is_err());
         access.new_code().unwrap();
-        access.pairing.as_mut().unwrap().created = Instant::now() - Duration::from_secs(121);
+        access.pairing.as_mut().unwrap().created.monotonic =
+            Instant::now() - Duration::from_secs(121);
         let code = access.pairing.as_ref().unwrap().code.clone();
         assert!(access.pair(&code, "Phone").is_err());
     }
