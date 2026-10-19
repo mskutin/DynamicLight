@@ -471,7 +471,7 @@ impl Engine {
         self.state.error.clear();
         match self.state.settings.mode.as_str() {
             "blend" => {
-                let screen = ScreenCapture::start(&self.state.settings.screen_id);
+                let screen = ScreenCapture::start(&self.state.settings);
                 let audio = Audio::start(self.state.settings.audio_source == "system");
                 let errors: Vec<_> = [screen.as_ref().err(), audio.as_ref().err()]
                     .into_iter()
@@ -490,7 +490,7 @@ impl Engine {
                     );
                 }
             }
-            "screen" => self.screen = Some(ScreenCapture::start(&self.state.settings.screen_id)?),
+            "screen" => self.screen = Some(ScreenCapture::start(&self.state.settings)?),
             "music" => {
                 self.audio = Some(Audio::start(self.state.settings.audio_source == "system")?)
             }
@@ -499,7 +499,7 @@ impl Engine {
         self.state.capturing = true;
         if self.state.settings.mode == "blend" {
             self.blend_sources = (
-                crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                crate::capture::source_signature(&self.state.settings).ok(),
                 crate::audio::source_signature(self.state.settings.audio_source == "system").ok(),
             );
         }
@@ -511,10 +511,10 @@ impl Engine {
         match self.state.settings.mode.as_str() {
             "blend" => Ok(format!(
                 "{:?}|{:?}",
-                crate::capture::source_signature(&self.state.settings.screen_id),
+                crate::capture::source_signature(&self.state.settings),
                 crate::audio::source_signature(self.state.settings.audio_source == "system")
             )),
-            "screen" => crate::capture::source_signature(&self.state.settings.screen_id),
+            "screen" => crate::capture::source_signature(&self.state.settings),
             "music" => crate::audio::source_signature(self.state.settings.audio_source == "system"),
             _ => Ok(String::new()),
         }
@@ -570,6 +570,7 @@ impl Engine {
         if settings.mode != self.state.settings.mode
             || settings.audio_source != self.state.settings.audio_source
             || settings.screen_id != self.state.settings.screen_id
+            || settings.capture_source != self.state.settings.capture_source
         {
             self.stop();
             self.life.capture_allowed = false;
@@ -791,7 +792,7 @@ impl Engine {
             self.source_check = Instant::now();
             if self.state.settings.mode == "blend" {
                 let sources = (
-                    crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                    crate::capture::source_signature(&self.state.settings).ok(),
                     crate::audio::source_signature(self.state.settings.audio_source == "system")
                         .ok(),
                 );
@@ -825,13 +826,13 @@ impl Engine {
             self.capture_retry = Instant::now();
             if crate::platform::check_capture_permission(&self.state.settings).is_ok() {
                 if self.screen.is_none() {
-                    self.screen = ScreenCapture::start(&self.state.settings.screen_id).ok();
+                    self.screen = ScreenCapture::start(&self.state.settings).ok();
                 }
                 if self.audio.is_none() {
                     self.audio = Audio::start(self.state.settings.audio_source == "system").ok();
                 }
                 self.blend_sources = (
-                    crate::capture::source_signature(&self.state.settings.screen_id).ok(),
+                    crate::capture::source_signature(&self.state.settings).ok(),
                     crate::audio::source_signature(self.state.settings.audio_source == "system")
                         .ok(),
                 );
@@ -1477,6 +1478,41 @@ mod tests {
         })
         .unwrap();
         assert!(!e.state.settings.studio.bias.enabled);
+    }
+    #[test]
+    fn changing_capture_region_revokes_prior_capture_consent() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut e = simulated(
+            Settings {
+                mode: "screen".into(),
+                ..Default::default()
+            },
+            dir.path().join("settings.json"),
+        );
+        e.life.requested = true;
+        e.life.capture_allowed = true;
+        e.state.capturing = true;
+        let source = crate::capture_source::Source::Region {
+            left: 250,
+            top: 0,
+            width: 500,
+            height: 1000,
+        };
+        e.action(Action::PatchSettings {
+            patch: SettingsPatch(serde_json::Map::from_iter([(
+                "captureSource".into(),
+                serde_json::to_value(source).unwrap(),
+            )])),
+            persist: true,
+        })
+        .unwrap();
+        assert!(!e.state.capturing && !e.life.capture_allowed);
+        assert!(e.state.capture_requires_start);
+        let portable = serde_json::to_value(SceneSettings::capture(&e.state.settings)).unwrap();
+        assert!(
+            portable.get("captureSource").is_none(),
+            "Local source identities are not portable scene data"
+        );
     }
     #[test]
     fn start_mode_restores_memory_and_respects_calibration_and_stop() {

@@ -277,6 +277,7 @@ function updateUI() {
   if (runtime) renderRuntime(runtime);
   refreshEffectPreviews();
   window.LibraryTools?.sync();
+  window.CaptureSources?.sync();
   updateWorkspaceSummary();
 }
 // Coalesce drag updates: at most one preview IPC in flight, then the newest value.
@@ -691,6 +692,7 @@ async function init() {
   await initProfiles();
   window.LibraryTools.init();
   window.Studio.init();
+  window.CaptureSources.init();
   window.Updates.init({ save, showSettings: () => showView("settings") });
   window.Automation.init();
   initCalibration();
@@ -1124,7 +1126,10 @@ function editScene(p) {
       await save();
       await mutate((next, i) => {
         next.profiles[i].settings = { ...settings, modeSettings: {} };
-        next.profiles[i].source = { screenId: settings.screenId };
+        next.profiles[i].source = {
+          screenId: settings.screenId,
+          captureSource: settings.captureSource || { kind: "display" },
+        };
       });
     },
     "refresh-cw",

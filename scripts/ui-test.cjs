@@ -18,6 +18,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         "appearance.js",
         "studio.js",
         "image-palette.js",
+        "capture-sources.js",
         "library-tools.js",
         "ui-common.js",
         "icons.svg",
@@ -76,6 +77,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         sensitivity: 50,
         fps: 30,
         screenId: "",
+        captureSource: { kind: "display" },
         offOnSleep: true,
         offOnDisplaySleep: true,
         offOnLock: true,
@@ -138,6 +140,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
           "reverse",
           "offset",
           "screenId",
+          "captureSource",
           "offOnSleep",
           "offOnDisplaySleep",
           "offOnLock",
@@ -192,6 +195,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
         },
         core: {
           invoke: async (cmd, args) => {
+            if (cmd === "capture_windows_list")
+              return [
+                {
+                  name: "Test player",
+                  source: {
+                    kind: "window",
+                    id: 123,
+                    pid: 456,
+                    app: "Player",
+                    session: "test",
+                  },
+                },
+              ];
             if (cmd === "studio_library") {
               if (args.next) fixture.studioLibrary = args.next;
               return structuredClone(
@@ -1517,6 +1533,39 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "playwright");
     }
     await page.screenshot({ path: ".local/ui-updates.png" });
 
+    // Capture source changes remain a deliberate, local selection.
+    await page.locator('[data-view="control"]').click();
+    await page.locator('[data-mode="screen"]').click();
+    await page.waitForFunction(() => !busy);
+    await page.locator("#source-open").click();
+    await page.locator("#source-kind").selectOption("region");
+    await page.locator("#source-left").fill("75");
+    await page.locator("#source-width").fill("50");
+    await page.locator("#source-apply").click();
+    assert.match(await page.locator("#source-status").innerText(), /inside/);
+    await page.locator("#source-left").fill("25");
+    await page.locator("#source-width").fill("50");
+    await page.locator("#source-apply").click();
+    await page.waitForFunction(
+      () => !document.querySelector("#source-dialog").open,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => fixture.state.settings.captureSource),
+      { kind: "region", left: 250, top: 0, width: 500, height: 1000 },
+    );
+    await page.locator("#source-open").click();
+    await page.locator("#source-kind").selectOption("window");
+    await page.locator("#source-refresh").click();
+    await page.locator("#source-windows").selectOption("0");
+    await page.locator("#source-apply").click();
+    await page.waitForFunction(
+      () => !document.querySelector("#source-dialog").open,
+    );
+    assert.equal(
+      await page.evaluate(() => fixture.state.settings.captureSource.id),
+      123,
+    );
+    await page.locator('[data-view="settings"]').click();
     // Appearance preferences cover every supported palette and both color schemes.
     await page.setViewportSize({ width: 1120, height: 780 });
     for (const theme of ["light", "dark"])

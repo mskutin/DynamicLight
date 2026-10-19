@@ -55,9 +55,17 @@ window.LightUI = (() => {
         "release",
         "speed",
       ],
-      screen: ["screenId", "excludeBars", "rgbBalance", "saturation", "gamma"],
+      screen: [
+        "screenId",
+        "captureSource",
+        "excludeBars",
+        "rgbBalance",
+        "saturation",
+        "gamma",
+      ],
       blend: [
         "screenId",
+        "captureSource",
         "audioSource",
         "blend",
         "inputGain",
@@ -73,15 +81,28 @@ window.LightUI = (() => {
     const s = {
       ...profile.settings,
       screenId: profile.source?.screenId ?? profile.settings.screenId ?? "",
+      captureSource: profile.source?.captureSource ??
+        profile.settings.captureSource ?? { kind: "display" },
     };
-    return ["mode", "brightness", "smoothing", ...(fields[s.mode] || [])].every(
+    return [
+      "mode",
+      "brightness",
+      "smoothing",
+      "studio",
+      ...(fields[s.mode] || []),
+    ].every(
       (key) =>
-        JSON.stringify(s[key]) === JSON.stringify(snapshot.settings[key]),
+        JSON.stringify(s[key]) ===
+        JSON.stringify(
+          key === "captureSource"
+            ? (snapshot.settings[key] ?? { kind: "display" })
+            : snapshot.settings[key],
+        ),
     );
   }
   let themeCache, themeDark;
   function theme() {
-    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = `${document.documentElement.dataset.theme}:${document.documentElement.dataset.accent}:${matchMedia("(prefers-color-scheme: dark)").matches}`;
     if (!themeCache || dark !== themeDark) {
       let probe = document.querySelector(".theme-probe");
       if (!probe) {

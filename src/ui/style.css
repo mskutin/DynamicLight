@@ -1699,3 +1699,25 @@ dd {
 #studio-selection {
   overflow-wrap: anywhere;
 }
+
+#source-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+#source-preview {
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  margin-block: 16px;
+}
+#source-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block: 12px;
+  min-width: 0;
+}
+#source-dialog input,
+#source-dialog select {
+  width: 100%;
+  min-width: 0;
+}

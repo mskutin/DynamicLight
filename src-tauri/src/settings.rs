@@ -16,6 +16,8 @@ pub struct Settings {
     pub sensitivity: u8,
     pub fps: u8,
     pub screen_id: String,
+    #[serde(default)]
+    pub capture_source: crate::capture_source::Source,
     pub off_on_sleep: bool,
     pub off_on_display_sleep: bool,
     pub off_on_lock: bool,
@@ -59,6 +61,7 @@ impl Default for Settings {
             sensitivity: 50,
             fps: 30,
             screen_id: String::new(),
+            capture_source: Default::default(),
             off_on_sleep: true,
             off_on_display_sleep: true,
             off_on_lock: true,
@@ -89,6 +92,7 @@ impl Default for Settings {
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
+        self.capture_source.validate()?;
         self.studio.validate()?;
         if self.mode_settings.len() > 5 {
             return Err("Too many remembered modes".into());
@@ -231,6 +235,8 @@ pub struct ModeSettings {
     sensitivity: u8,
     fps: u8,
     screen_id: String,
+    #[serde(default)]
+    capture_source: crate::capture_source::Source,
     effect: String,
     palette: String,
     #[serde(default)]
@@ -259,6 +265,7 @@ impl ModeSettings {
             sensitivity: s.sensitivity,
             fps: s.fps,
             screen_id: s.screen_id.clone(),
+            capture_source: s.capture_source.clone(),
             effect: s.effect.clone(),
             palette: s.palette.clone(),
             custom_palette: s.custom_palette.clone(),
@@ -284,6 +291,7 @@ impl ModeSettings {
         s.sensitivity = self.sensitivity;
         s.fps = self.fps;
         s.screen_id = self.screen_id.clone();
+        s.capture_source = self.capture_source.clone();
         s.effect = self.effect.clone();
         s.palette = self.palette.clone();
         s.custom_palette = self.custom_palette.clone();
@@ -396,6 +404,8 @@ impl SceneSettings {
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct SourceBinding {
     pub screen_id: String,
+    #[serde(default)]
+    pub capture_source: crate::capture_source::Source,
 }
 
 /// Atomic field edits resolved against the worker's current settings. Disjoint
