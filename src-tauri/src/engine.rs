@@ -20,6 +20,11 @@ use std::{
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Action {
     #[serde(skip)]
+    Remote {
+        action: Box<Action>,
+        active: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    },
+    #[serde(skip)]
     Extension {
         overlay: crate::extensions::Overlay,
         cue: bool,
@@ -967,6 +972,18 @@ impl Engine {
                     }
                 }
             }
+            Action::Remote { action, active } => {
+                if !self.state.pause_reason.is_empty()
+                    && !matches!(*action, Action::Power { on: false })
+                {
+                    return Err("Host lighting is paused".into());
+                }
+                return self.action(Action::Automation {
+                    action,
+                    active,
+                    allow_capture: false,
+                });
+            }
             Action::Automation {
                 action,
                 active,
@@ -994,6 +1011,10 @@ impl Engine {
                     Action::Toggle
                     | Action::Routine { .. }
                     | Action::Extension { .. }
+                    | Action::Adjust {
+                        brightness: None,
+                        color: Some(_),
+                    }
                     | Action::Power { on: false }
                     | Action::Adjust {
                         brightness: Some(_),
@@ -1893,6 +1914,42 @@ mod tests {
         .unwrap();
         assert!(!e.life.requested);
         assert_eq!(e.state.settings.color, "#00ff00");
+    }
+    #[test]
+    fn remote_color_preserves_off_and_worker_checks_pause_and_revocation() {
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let mut e = simulated(Settings::default(), dir.path().join("settings.json"));
+        let active = Arc::new(AtomicBool::new(true));
+        let color = || Action::Remote {
+            action: Box::new(Action::Adjust {
+                brightness: None,
+                color: Some("#123456".into()),
+            }),
+            active: active.clone(),
+        };
+        e.action(color()).unwrap();
+        assert_eq!(e.state.settings.color, "#123456");
+        assert!(!e.life.requested && !e.state.capturing);
+        e.system_event(SystemEvent::Sleep(true));
+        assert!(e.action(color()).is_err());
+        e.action(Action::Remote {
+            action: Box::new(Action::Power { on: false }),
+            active: active.clone(),
+        })
+        .unwrap();
+        e.system_event(SystemEvent::Sleep(false));
+        active.store(false, Ordering::Release);
+        assert!(e
+            .action(Action::Remote {
+                action: Box::new(Action::Start),
+                active
+            })
+            .is_err());
+        assert!(!e.life.requested);
     }
     #[test]
     fn extensions_restore_scene_on_revocation_stop_and_suspend_and_obey_comfort() {

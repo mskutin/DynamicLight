@@ -27,3 +27,7 @@ Controller routing, visual layout, handoff and ambient sensors (#8, #34, #26, #2
 Next: paired LAN remote, supported game telemetry and isolated plugins (#17, #24, #27).
 
 Hardware batch #59 merged after all four builds passed; production 0.14.0 release is running. Games and declarative plugins (#24, #27) are implemented for 0.15.0; local final validation is in progress. The remaining implementation item is the paired LAN remote (#17).
+
+Paired phone remote (#17) implemented for 0.16.0: session-only HTTPS, private-interface/controller selection, one-use pairing and client revocation, constrained shared API/CLI color command, responsive controls, actual TLS and isolated native phone UI checks. All implementation items are now delivered in code; final cross-platform CI and published-asset verification remain in progress. Physical validation trackers #37/#38/#45 stay open.
+
+Release 0.14.0 is published and verified: 21 assets, 20 checksums, four updater signatures and the Windows CLI version. Games/plugins #60 has passed platform build/test steps; Windows cache finalization is pending. The 0.16 remote final local checks passed (97 native cases across the full suite and added worker-pause case, 9 CLI/control cases, strict Clippy, browser controls, 14 release tests, real TLS unit test, isolated native phone/CLI smoke). See docs/backlog-validation.md for the remaining physical handoff.
