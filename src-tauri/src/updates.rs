@@ -287,6 +287,9 @@ pub async fn update_install(
             });
             let app = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                if let Some(window) = app.get_webview_window("compact") {
+                    crate::compact::remember(&window)?;
+                }
                 let handle = app.state::<Handle>().inner().clone();
                 // Keep the worker alive so a failed installer can be retried and
                 // lighting can be started again. Preserve the saved startup intent.
