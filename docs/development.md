@@ -74,4 +74,4 @@ Login startup uses the [Tauri autostart plugin](https://v2.tauri.app/plugin/auto
 
 Protocol references: [HdrBridge wire format](https://github.com/GetTheNya/HdrBridge/blob/main/node_strip_test.js), [SyncLight RB commands](https://github.com/jakebuild/synclight), and [section command investigation](https://github.com/tanmaster/light-control).
 
-Effect thumbnails call the read-only `effect_previews` command at up to 10 Hz. It evaluates the same Rust effect functions at 48 sample positions with the selected palette, speed, and brightness, without USB or capture. Requests stop offscreen, on blur, when hidden, or outside Effects mode. Reduced motion uses a fixed phase. `src/ui/icon.svg` is the shared UI/native icon source; regenerate native assets with `pnpm tauri icon src/ui/icon.svg`, retaining the PNG, ICO and ICNS bundle assets.
+Effect thumbnails call the read-only `effect_previews` command at up to 10 Hz. It evaluates the same Rust effect functions at 48 sample positions with the selected palette, speed, and brightness, without USB or capture. Requests stop offscreen, on blur, when hidden, or outside Effects mode. Reduced motion uses a fixed phase.
