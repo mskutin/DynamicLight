@@ -41,6 +41,13 @@ pub struct Updates {
     path: PathBuf,
 }
 struct Operation<'a>(&'a AtomicBool);
+impl<'a> Operation<'a> {
+    fn begin(busy: &'a AtomicBool) -> Result<Self, String> {
+        busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "An update operation is already running".to_string())?;
+        Ok(Self(busy))
+    }
+}
 impl Drop for Operation<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
@@ -48,10 +55,7 @@ impl Drop for Operation<'_> {
 }
 impl Updates {
     fn begin(&self) -> Result<Operation<'_>, String> {
-        self.busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| "An update operation is already running".to_string())?;
-        Ok(Operation(&self.busy))
+        Operation::begin(&self.busy)
     }
 }
 fn change(app: &tauri::AppHandle, edit: impl FnOnce(&mut Model)) -> Status {
@@ -321,10 +325,12 @@ mod tests {
     }
     #[test]
     fn operations_are_exclusive_and_released_after_failure() {
-        let busy = AtomicBool::new(true);
+        let busy = AtomicBool::new(false);
         {
-            let _operation = Operation(&busy);
+            let _operation = Operation::begin(&busy).unwrap();
+            assert!(Operation::begin(&busy).is_err());
         }
         assert!(!busy.load(Ordering::Acquire));
+        assert!(Operation::begin(&busy).is_ok());
     }
 }
