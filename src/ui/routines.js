@@ -13,12 +13,23 @@ window.Routines = (() => {
   async function task(fn) {
     if (working) return;
     working = true;
+    el("dialog")
+      .querySelectorAll("button:not(#routine-close)")
+      .forEach((button) => {
+        button.disabled = true;
+      });
     try {
       await fn();
     } catch (e) {
       el("message").textContent = String(e);
     } finally {
       working = false;
+      el("dialog")
+        .querySelectorAll("button:not(#routine-close)")
+        .forEach((button) => {
+          button.disabled = false;
+        });
+      sync(runtime);
     }
   }
   function sync(value) {
@@ -34,7 +45,7 @@ window.Routines = (() => {
       ? "Resume timer"
       : "Pause timer";
     for (const id of ["pause-timer", "skip", "cancel"])
-      el(id).disabled = !s.timerPhase;
+      el(id).disabled = working || !s.timerPhase;
   }
   function draw() {
     el("paused").checked = config.paused;
