@@ -1,4 +1,4 @@
-# Studio validation (0.5–0.6)
+# Studio validation (0.5–0.7)
 
 Physical checks are deferred at the user's request. Automated tests and successful packages are not evidence that a particular strip, desktop permission flow, or audio route works.
 

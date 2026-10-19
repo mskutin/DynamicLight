@@ -11,8 +11,8 @@ Backlog means uncommitted future work. In Progress is reserved for active implem
 Physical testing remains deferred. Record results in these issues; do not mark unchecked scenarios passed based on builds or simulations.
 
 - **[#37](https://github.com/mskutin/DynamicLight/issues/37) — Validate accessibility across studio, Quick controls and tray.** Complete keyboard, contrast, scaling and Windows/macOS screen-reader validation.
-- **[#38](https://github.com/mskutin/DynamicLight/issues/38) — Validate macOS 0.6 releases on Intel and Apple Silicon.** Physical Mac USB, capture, permission, tray and lifecycle validation.
-- **[#45](https://github.com/mskutin/DynamicLight/issues/45) — Validate Windows and Linux 0.6 on physical hardware.** Physical Windows/Linux lifecycle, capture, USB and desktop checks; see the linked tracker.
+- **[#38](https://github.com/mskutin/DynamicLight/issues/38) — Validate macOS preview releases on Intel and Apple Silicon.** Physical Mac USB, capture, permission, tray and lifecycle validation.
+- **[#45](https://github.com/mskutin/DynamicLight/issues/45) — Validate Windows and Linux preview releases on physical hardware.** Physical Windows/Linux lifecycle, capture, USB and desktop checks; see the linked tracker.
 
 ## Future work
 
@@ -45,7 +45,7 @@ P2 expands product capability; P3 covers exploratory features and integrations. 
 | [#17](https://github.com/mskutin/DynamicLight/issues/17) | Add a paired phone remote on the local network | P3 | [#16](https://github.com/mskutin/DynamicLight/issues/16) |
 | [#23](https://github.com/mskutin/DynamicLight/issues/23) | Adapt brightness to an ambient-light sensor | P3 | — |
 | [#24](https://github.com/mskutin/DynamicLight/issues/24) | Add game telemetry integrations | P3 | [#16](https://github.com/mskutin/DynamicLight/issues/16) |
-| [#26](https://github.com/mskutin/DynamicLight/issues/26) | Coordinate device handoff between Windows and Mac | P3 | [#18](https://github.com/mskutin/DynamicLight/issues/18) |
+| [#26](https://github.com/mskutin/DynamicLight/issues/26) | Coordinate device handoff between Windows and Mac | P3 | — |
 | [#27](https://github.com/mskutin/DynamicLight/issues/27) | Define a plugin system for effects and integrations | P3 | — |
 
 ## Delivered
