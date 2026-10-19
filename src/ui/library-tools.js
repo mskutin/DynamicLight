@@ -20,7 +20,8 @@ window.LibraryTools = (() => {
     ['hue','sat','light'].forEach((c,i)=>{el('color-'+c).value=Math.round(hsl[i]);el('color-'+c+'-value').textContent=Math.round(hsl[i])+(i?'%':'°');});
     const canvas=el('color-preview'), ctx=canvas.getContext('2d');ctx.fillStyle=draft;ctx.fillRect(0,0,canvas.width,canvas.height);
     const wheel=el('color-wheel'), wc=wheel.getContext('2d'), radius=wheel.width/2;
-    const light=Math.round(hsl[2]);
+    // Keep hue choices visible even when the current color is white or black.
+    const light=50;
     if(wheelBase?.light!==light){const data=wc.createImageData(wheel.width,wheel.height);
     for(let y=0;y<wheel.height;y++)for(let x=0;x<wheel.width;x++){
       const dx=x-radius,dy=y-radius, distance=Math.hypot(dx,dy)/radius;if(distance>1)continue;
@@ -66,7 +67,7 @@ window.LibraryTools = (() => {
     el('color-hex').oninput=e=>{if(/^#[0-9a-f]{6}$/i.test(e.target.value))setDraft(e.target.value);};
     ['red','green','blue'].forEach(c=>el('color-'+c).oninput=()=>{const fields=['red','green','blue'].map(k=>el('color-'+k));if(fields.every(f=>f.value!==''&&f.checkValidity()))setDraft(hex(fields.map(f=>+f.value)));});
     ['hue','sat','light'].forEach((c,i)=>el('color-'+c).oninput=e=>{hsl[i]=+e.target.value;setDraft(fromHsl(...hsl),true);});
-    const pick=e=>{const rect=el('color-wheel').getBoundingClientRect(),dx=(e.clientX-rect.left)/rect.width-.5,dy=(e.clientY-rect.top)/rect.height-.5;hsl[0]=(Math.atan2(dy,dx)*180/Math.PI+360)%360;hsl[1]=Math.min(100,Math.hypot(dx,dy)*200);setDraft(fromHsl(...hsl),true);};
+    const pick=e=>{const rect=el('color-wheel').getBoundingClientRect(),dx=(e.clientX-rect.left)/rect.width-.5,dy=(e.clientY-rect.top)/rect.height-.5;hsl[0]=(Math.atan2(dy,dx)*180/Math.PI+360)%360;hsl[1]=Math.min(100,Math.hypot(dx,dy)*200);if(hsl[2]===0||hsl[2]===100)hsl[2]=50;setDraft(fromHsl(...hsl),true);};
     el('color-wheel').onpointerdown=e=>{el('color-wheel').setPointerCapture(e.pointerId);pick(e);};el('color-wheel').onpointermove=e=>{if(el('color-wheel').hasPointerCapture(e.pointerId))pick(e);};
     el('color-temperature').oninput=e=>{
       // Deliberate RGB approximation between warm/cool reference swatches.

@@ -73,17 +73,14 @@ impl Bundle {
             return Err("The scene file is empty".into());
         }
         let mut ids = HashSet::new();
-        let mut names = HashSet::new();
         if self.profiles.len() > 40 {
             return Err("A scene file can contain up to 40 profiles".into());
         }
         for p in &self.profiles {
-            if !valid_id(&p.id)
-                || !valid_name(&p.name)
-                || !ids.insert(&p.id)
-                || !names.insert(p.name.to_lowercase())
-            {
-                return Err("Scene IDs and names must be valid and unique".into());
+            if !valid_id(&p.id) || !valid_name(&p.name) || !ids.insert(&p.id) {
+                return Err(
+                    "Scene IDs must be unique and names must contain 1–50 characters".into(),
+                );
             }
             p.settings.validate()?;
         }
@@ -277,6 +274,7 @@ fn merge(base: &Library, bundle: &Bundle, policy: &str) -> Result<Library, Strin
             });
         }
     }
+    let mut replaced_palettes = HashSet::new();
     for (i, p) in bundle.palettes.iter().enumerate() {
         let old = base
             .palettes
@@ -286,6 +284,9 @@ fn merge(base: &Library, bundle: &Bundle, policy: &str) -> Result<Library, Strin
             continue;
         }
         if let Some(old) = old.filter(|_| policy == "replace") {
+            if !replaced_palettes.insert(old.id.clone()) {
+                return Err("Several imported palettes match the same local palette. Choose Keep both instead.".into());
+            }
             let target = next
                 .palettes
                 .iter_mut()
@@ -336,6 +337,45 @@ mod tests {
             }],
             recent_colors: vec!["#abcdef".into()],
         }
+    }
+    #[test]
+    fn equally_named_saved_scenes_can_be_exported_and_imported_as_distinct_copies() {
+        let mut base = library();
+        let mut second = base.profiles[0].clone();
+        second.id = "second".into();
+        second.shortcut.clear();
+        base.profiles.push(second);
+        let bundle = portable(&base, &["desk".into(), "second".into()], &[]).unwrap();
+        let imported = merge(&Library::default(), &bundle, "copy").unwrap();
+        assert_eq!(imported.profiles.len(), 2);
+        assert_eq!(imported.profiles[0].name, "Desk");
+        assert_eq!(imported.profiles[1].name, "Desk (2)");
+        assert!(merge(&base, &bundle, "replace").is_err());
+    }
+    #[test]
+    fn several_palette_matches_cannot_silently_replace_one_target() {
+        let base = library();
+        let mut bundle = portable(&base, &[], &["test".into()]).unwrap();
+        bundle.palettes[0].name = "First".into();
+        bundle.palettes.push(Palette {
+            id: "second".into(),
+            name: "Test".into(),
+            colors: vec!["#ff0000".into()],
+        });
+        let error = merge(&base, &bundle, "replace").err().unwrap();
+        assert!(error.contains("same local palette"));
+        assert_eq!(merge(&base, &bundle, "copy").unwrap().palettes.len(), 3);
+    }
+    #[test]
+    fn backup_preserves_the_original_library_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("profiles.json");
+        std::fs::write(&path, b"an old file that failed to decode").unwrap();
+        backup_library(&path, &Library::default()).unwrap();
+        assert_eq!(
+            std::fs::read(path.with_file_name("profiles.before-import.json")).unwrap(),
+            b"an old file that failed to decode"
+        );
     }
     #[test]
     fn selected_export_roundtrips_without_local_state_and_creates_missing_directory() {
@@ -440,15 +480,25 @@ pub async fn import_profiles(
             return Err("Scene file is too large".into());
         }
         let next = merge(&current, &bundle, &policy)?;
-        save_json(
-            &*current,
-            &store.path.with_file_name("profiles.before-import.json"),
-        )?;
+        backup_library(&store.path, &current)?;
         replace_library(&app, &mut current, next, &store.path)?;
         Ok(current.clone())
     })
     .await
     .map_err(|e| e.to_string())?
+}
+fn backup_library(path: &Path, current: &Library) -> Result<(), String> {
+    let backup = path.with_file_name("profiles.before-import.json");
+    if !path.exists() {
+        return save_json(current, &backup);
+    }
+    // Preserve original bytes even if startup could not decode the old file.
+    let directory = path.parent().ok_or("Invalid library path")?;
+    let file = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
+    std::fs::copy(path, file.path()).map_err(|e| e.to_string())?;
+    file.as_file().sync_all().map_err(|e| e.to_string())?;
+    file.persist(backup).map_err(|e| e.to_string())?;
+    Ok(())
 }
 fn write_export(directory: &Path, bundle: &Bundle) -> Result<String, String> {
     std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
